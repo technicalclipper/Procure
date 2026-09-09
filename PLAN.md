@@ -134,7 +134,7 @@ Build on testnet, submit 13 Sep, deploy to mainnet after it launches 16 Sep. Req
 
 **Positioning:** the model is **behavioural** — it reads how an address *transacts* (flow shape, counterparty spread, forwarding patterns) rather than how long it has existed. Describe it that way in the README and the video. It's accurate, it's the model's genuine strength, and it needs no caveat.
 
-> Internal note: the Token API's transfer window (30d default, 180d max) is what shapes this. Don't volunteer it — but never claim longevity or address-age analysis either, since we don't do it. If a Graph judge asks directly, answer straight: they built the API and know its limits, and a bluff collapses badly in person.
+> Verified 2026-09-09: the Token API has no historical cutoff — transfers retrieved back to Jan 2023, historical balances to Feb 2022. Address-age and dormancy signals are therefore in scope. The real constraint is 10 items per request on the free tier, handled by pagination (200 req/min).
 
 ---
 
@@ -181,7 +181,24 @@ USER WALLETS (Privy embedded, one per member)
 
 > Production would use central funds + allowances (more capital-efficient). Pre-funding is the correct hackathon choice and the stronger demo. Know the tradeoff if asked.
 
-**Why approvals are signatures:** an approval that's a database row can be forged by anyone with DB access. An approval that's a signature from the approver's own wallet cannot. Privy's quorum enforces 2-of-3 at the wallet layer, not in our code.
+**Why approvals are signatures, not database rows**
+
+An approval stored as a DB row can be forged by anyone with database access. An approval that is a cryptographic signature cannot.
+
+Implement this with a **Privy key quorum** — *"signatures from m-of-n authorization keys are required in order to take action using the wallet."*
+
+| | Approach | Enforced by |
+|---|---|---|
+| A | Approvals are DB rows; backend fires payment with the app secret once 2 of 3 recorded | Our code |
+| **B** ✅ | **Each approver holds an authorization key; department wallet has a 2-of-3 key quorum as its signer** | **Privy infrastructure** |
+
+**Take B.** It is the single strongest Privy integration point available — "quorum approvals" is named verbatim in the B2B track requirements — and it converts the best demo beat from an `if` statement into the wallet cryptographically refusing to act. "Approver A signs, nothing happens" becomes a property of the treasury, not of our backend.
+
+Setup: Dashboard → **Wallet infrastructure → Authorization keys → New key** (private key shown once). Create a key quorum from the public keys with a threshold of 2, then attach it as a signer on the department wallet at creation time (`signerId` + optional `policyIds` to scope permissions).
+
+> For the demo we hold all three keys and state plainly that in production each approver holds their own. Normal and honest for a hackathon.
+
+Build this on **Mon 8** alongside approval routing — not as an afterthought.
 
 ### Control layers
 
@@ -566,22 +583,45 @@ Graph data makes a decision in the core payment path. That is the "load-bearing"
 
 ### Signals
 
-The model is **behavioural**: it reads how an address transacts, not how long it has existed.
+| Signal | Tells you | Weight | Source |
+|---|---|---|---|
+| **Immediate forwarding / sweep pattern** | Pass-through or mule account | **Strong** | `/v1/evm/transfers` both directions |
+| **Address age** (first activity) | Fresh wallet invoicing $50k | **Strong** | binary search on `start_time`/`end_time` |
+| **Dormancy break** | Active → dormant → suddenly active = possible takeover | Moderate | transfer timestamps |
+| Counterparty diversity | Operating business vs conduit | Moderate | distinct `from`/`to` across pages |
+| Stablecoin flow shape | Commercial rhythm vs lumpy movement | Moderate | amounts + cadence |
+| Volume + cadence | Real activity level | Moderate | transfer counts |
+| Balances across chains | Substance | Contextual | `/v1/evm/balances` |
+| EOA vs contract (Safe/multisig) | Professional treasury? | Contextual | `getCode` via viem |
 
-| Signal | Tells you | Weight |
-|---|---|---|
-| **Immediate forwarding / sweep pattern** | Pass-through or mule account | **Strong** |
-| Counterparty diversity | Operating business vs conduit | Moderate |
-| Stablecoin flow shape | Commercial rhythm vs lumpy movement | Moderate |
-| Volume + cadence | Real activity level | Moderate |
-| Balances across chains | Substance | Contextual |
-| EOA vs contract (Safe/multisig) | Professional treasury? | Contextual — via `getCode` |
+**Sweep detection is the highest-value signal** and the one most likely to stop a genuinely bad onboarding: an address that forwards ~everything it receives within a block or two is a conduit, not a supplier.
 
-Sweep detection is the highest-value signal and the one most likely to stop a genuinely bad onboarding: an address that forwards ~everything it receives within a block or two is a conduit, not a supplier.
+**Address age** is the second: it is cheap to compute (≈10 requests binary-searching the time range for first activity) and a wallet created three weeks ago invoicing five figures is the clearest red flag there is.
+
+> Fetch budget per vendor: ~10 pages inbound + ~10 pages outbound at 10 items each (~100 in / 100 out), plus ~10 for the age search. Roughly 30 requests against a 200/min limit — a few seconds, well inside budget.
 
 **Chains covered by Token API:** Ethereum, Arbitrum, BSC, Polygon, Optimism, Base. **Not Arc.**
 
 > We analyse Ethereum/L2 history, then pay on Arc. Frame it positively: *"before approving this address for payment on Arc, here's what it has done everywhere else."*
+
+### Which Graph product, and which track
+
+**Product: The Graph Token API.** Auth via a JWT from The Graph Market dashboard. Two endpoints, both called per vendor at onboarding:
+
+| Endpoint | Gives us | Feeds |
+|---|---|---|
+| **Balances** | ERC-20 + native balances across all 6 supported chains | Substance — does this address hold anything? |
+| **Transfers** | Transfer history for the address | Sweep detection, counterparty spread, flow shape, cadence |
+
+**Track: AI Use Case (From Scratch) only.** We are *not* targeting "Composable or Standardized Graph Products" — that track requires composing 2+ Graph products or building on a standardized schema, and its own requirements redirect single-source queriers to the AI track.
+
+**Why Token API rather than a subgraph:** subgraphs are protocol-scoped — they index a specific contract's events, and Messari Standardized Subgraphs cover DeFi protocol *types* (lending, DEX, yield). None of that answers *"how does this arbitrary address behave?"* Token API is address-scoped and cross-chain, which is the exact shape of the vendor screening problem. Right tool, not a compromise.
+
+> ⚠️ **Verify in The Graph Discord:** the AI track phrases the data requirement as *"API keys from Subgraph Studio or Substreams via The Graph Market"* — it doesn't name Token API. Token API auth *does* come from The Graph Market, so it should count, but ask:
+>
+> *"Does the Token API count as consuming live data from a Graph provider for the AI Use Case track?"*
+>
+> **Fallback if no:** query an existing token-transfers subgraph via Subgraph Studio for the same behavioural signals. More setup, same output shape. Resolve this before Wednesday.
 
 ### AI's role
 
@@ -592,6 +632,56 @@ Sweep detection is the highest-value signal and the one most likely to stop a ge
 - AI flags anomalies the rules didn't anticipate
 
 If AI does the *detection*, it's hand-waving. If AI does *interpretation* over verifiable indexed data, it's exactly the track's ask.
+
+### The screening UI
+
+Triggered from vendor creation: controller enters name / email / payout address, clicks **Run Risk Check**. This is one of the five demo-carrying screens — budget real polish.
+
+**1. Progressive loading, not a spinner.** Stream each step as it completes so the work is visible:
+
+```
+✓ Resolving address across 6 chains
+✓ Ethereum · 412 transfers
+✓ Base · 89 transfers
+⋯ Arbitrum
+  Computing signals…
+  Generating assessment…
+```
+
+**2. Verdict header** — score, band, and the consequence stated plainly:
+
+| Band | Score | Shown |
+|---|---|---|
+| 🔴 BLOCKED | < `VENDOR_RISK_BLOCK_BELOW` (40) | "This address will not be added to the payment allowlist." |
+| 🟡 REVIEW | 40–69 | "Approval requires a written justification." |
+| 🟢 CLEAR | ≥ `VENDOR_RISK_REVIEW_BELOW` (70) | "Eligible for the payment allowlist." |
+
+**3. Signal breakdown — expandable rows.** Name · finding · score contribution. Expanding reveals the **actual transfers** behind the finding:
+
+```
+▼ Forwarding behaviour                    −32   🔴
+  98% of inflows forwarded within 2 blocks.
+  Consistent with a pass-through account.
+  ┌─────────────────────────────────────────┐
+  │ 0x4a1…  +5,000 USDC   block 21847221    │
+  │ 0x4a1…  −4,998 USDC   block 21847223 ↗  │
+  └─────────────────────────────────────────┘
+
+▶ Counterparty diversity                   −8   🟡
+▶ Flow shape                               +4   🟢
+▶ Account type (EOA)                       −2   🟡
+▶ Cross-chain balances                     +6   🟢
+```
+
+The drill-down is what makes the assessment *descriptive* rather than an opaque number — and it visibly proves real indexed data is behind the score.
+
+**4. AI assessment** — streamed in so it types out live on camera:
+
+> *"This address first appears as a high-throughput conduit rather than an operating supplier. Across 501 transfers on two chains, 98% of received value is forwarded within two blocks, and inflows originate from only three distinct counterparties. The pattern is inconsistent with a business receiving payment for goods or services."*
+
+**5. Decision bar** — `Reject` · `Save as draft` · `Approve & add to allowlist`
+
+**Override with reason:** a controller can force approval of a BLOCKED address, but must type a justification, which is written to the audit log and emailed to the org. Real AP systems work this way, it's auditable, and it's the escape hatch if the score misfires live during the demo.
 
 ### How to describe it
 
@@ -614,7 +704,7 @@ If AI does the *detection*, it's hand-waving. If AI does *interpretation* over v
 | Email | Resend (behind a Mailer interface) |
 | PDF | `@react-pdf/renderer` |
 | Indexer | The Graph Token API |
-| AI | Anthropic or OpenAI, server-side only |
+| AI | OpenAI (`gpt-4o`), server-side only — key never reaches the client |
 
 ### Arc testnet — verified live 2026-09-06
 
@@ -791,33 +881,83 @@ With ERC-20, the entire payment path *and* the policy config are 6-decimal, matc
 
 **Cost:** slightly more gas, and policies need the ABI. Both trivial.
 
-### ⚠️ PARTIALLY RESOLVED — Privy on Arc
+### ✅ RESOLVED — Privy on Arc: sign locally, broadcast ourselves (verified 2026-09-09)
 
-**Strong evidence it works, not yet empirically confirmed.**
+Tested live against the Privy API with our app credentials.
 
-Evidence for:
-- Server wallets take CAIP-2 `eip155:${number}` with **no documented chain allowlist**
-- Privy docs state server wallets "work across all EVM chains"
-- Policy engine uses `chain_type: "ethereum"` — a **type**, not an enumerated chain list — with `chain_id` inside conditions. Chain-agnostic by design.
-- Policy engine documented as available across EVM-compatible chains
+| Test | Result |
+|---|---|
+| Auth (`GET /v1/wallets`) | ✅ 200 |
+| Create server wallet (`POST /v1/wallets`, `chain_type: ethereum`) | ✅ 200 |
+| **`eth_sendTransaction` with `caip2: eip155:5042002`** | ❌ **401 — "App is not authorized to transact on chain eip155:5042002"** |
+| Control: same call on `eip155:84532` (Base Sepolia) | ✅ reached broadcast — "insufficient funds" |
+| **`eth_signTransaction`, chain_id 5042002 in the tx (no `caip2` key)** | ✅ **200 — returns signed RLP** |
+| Signed RLP decodes to | `0x02` (EIP-1559) + `83 4cef52` = **chain 5042002** ✅ |
+| Signing ERC-20 `transfer()` calldata to `0x3600…0000` | ✅ 200 |
+| **Policy attached → sign to disallowed recipient** | ✅ **400 — "RPC request denied due to policy violation"** |
+| Policy attached → sign to allowed recipient | ✅ 200, signed |
 
-**The precise residual risk: broadcast, not signing.** Privy must be able to *submit* the signed transaction to Arc. If Privy maintains its own RPC endpoints per known chain, an unrecognised chain ID could fail at the broadcast step even though the policy layer is chain-agnostic. `addRpcUrlOverrideToChain` exists for `@privy-io/react-auth` (client-side); **no server-wallet equivalent found in the docs.**
+**Conclusion: the architecture holds.** Privy will not *broadcast* to Arc, but it will *sign* for Arc, and **the policy engine evaluates on `eth_signTransaction`** — which is the control that actually matters.
 
-**Fallback if broadcast fails — the design survives:**
+**Payment path:**
 
-Have the Privy server wallet **sign only** (`signTransaction`, not `sendTransaction`), then broadcast the raw signed transaction ourselves via viem against `https://rpc.testnet.arc.io`. The policy engine still evaluates at signing time, so **both control layers remain intact** — we just move the broadcast step in-house.
+```
+MATCH_PASSED
+   → build ERC-20 transfer() tx for chain 5042002
+   → POST /v1/wallets/{id}/rpc  { method: "eth_signTransaction", params: { transaction: {...} } }
+        └─ PRIVY POLICY ENGINE evaluates here  ← control layer intact
+   → returns signed RLP
+   → we broadcast via viem to https://rpc.testnet.arc.io
+   → PAYMENT_SETTLED
+```
 
-Verify `signTransaction` exists for server wallets when testing.
+**API gotchas discovered:**
+
+- `eth_signTransaction` **rejects the `caip2` key** — put `chain_id` inside the `transaction` object instead. (`eth_sendTransaction` wants `caip2`; they differ.)
+- Policy creation: **no `default_action` key** — `POST /v1/policies` takes `{version, name, chain_type, rules[]}`. Rules with no matching ALLOW are denied.
+- Policy rules must set `"method": "eth_signTransaction"` to gate our path — a rule scoped to `eth_sendTransaction` will not fire.
+- Attach via `PATCH /v1/wallets/{id}` with `{"policy_ids":[...]}`. **Use the top-level `id`, not the nested rule `id`.**
+- Wallet objects expose `policy_ids` and `additional_signers` — the latter is where key quorums attach.
+
+> **Worth asking Privy support anyway:** the wording *"App is not authorized to transact on chain"* reads like an allowlist rather than "chain unknown". If they can enable Arc for the app, we get native broadcast and drop the self-broadcast step. Not blocking — the fallback is fine and arguably a better story (we control the RPC).
+
+### ✅ RESOLVED — Token API (verified 2026-09-09)
+
+| | |
+|---|---|
+| Host | **`https://api.pinax.network`** (`token-api.thegraph.com` no longer connects) |
+| Auth | `Authorization: Bearer <TOKEN_API_JWT>` |
+| Endpoints | `/v1/evm/transfers`, `/v1/evm/balances`, `/v1/evm/balances/historical`, `/v1/evm/tokens`, `/v1/evm/holders` (+ `/native` variants) |
+| Transfers params | `network*`, `from_address`, `to_address`, `contract`, `start_time`, `end_time`, `start_block`, `end_block`, `limit`, `page` |
+| **Item cap** | **10 per request** on FREE — `limit=100` returns 403 |
+| Pagination | ✅ works (`page=`) |
+| Rate limit | 200/min → ~2,000 items/min |
+| **Historical reach** | ✅ **No 180-day limit.** Verified transfers back to Jan 2023 and historical balances to Feb 2022. |
+| JWT expiry | **2027-10-31** — no demo-day risk |
+| OpenAPI spec | `GET /openapi` |
+
+> **Correction to an earlier assumption:** there is no 180-day window. **Address-age and dormancy signals are viable** — find first activity by binary-searching `start_time`/`end_time`, roughly 10 requests. Update §11's signal table accordingly.
+>
+> Inflows and outflows are separate queries (`to_address` vs `from_address`) — which suits sweep detection, since we want both directions anyway. Budget ~10 pages each way per vendor (~100 in / 100 out, ~20 requests, a few seconds).
+
+> **Qualification note:** Pinax's own docs say *"you can get your API token at The Graph Market."* That materially strengthens the case that this counts as consuming live data from a Graph provider.
+
+### ⚠️ Environment gotcha that cost an hour
+
+`PRIVY_APP_SECRET` and `PRIVY_AUTHORIZATION_PRIVATE_KEY` were pasted from the dashboard carrying a trailing **U+2028 LINE SEPARATOR** — invisible in any editor, 3 bytes in UTF-8, and it produced a flat `401 Invalid app ID or app secret`.
+
+Symptom to recognise: `wc -c` and JS `.length` disagree on the same value.
+
+`scratchpad/clean-env.mjs` strips U+2028/2029/00A0/200B/200C/200D/FEFF. **If any credential 401s, run that first before assuming the credential is wrong.**
 
 ### Remaining open questions
 
 | # | Question | Why it matters | How to resolve |
 |---|---|---|---|
-| 1 | Can Privy server wallets **broadcast** to `eip155:5042002`? | If not, use the sign-only fallback above | Smoke test + email support@privy.io |
-| 2 | Does `signTransaction` exist for server wallets? | It's the fallback path | Privy API reference |
-| 3 | Does Resend restrict unverified accounts to the signup address? | Determines demo email addressing | Sign up and try |
-| 4 | Graph Token API auth + exact endpoints for transfer history | Risk feature depends on it | The Graph Market dashboard |
-| 5 | Onchain contracts — needed, or is Privy + DB enough? | Arc tracks may expect deployed contracts; "PO registry onchain" is currently aspirational | Decide after smoke test |
+| 1 | Does Resend restrict unverified accounts to the signup address? | Demo email addressing | Sign up and try |
+| 2 | Onchain contracts — needed, or is Privy + DB enough? | Arc tracks may expect deployed contracts; "PO registry onchain" is aspirational | **Product decision** |
+| 3 | Quorum timing — can 2-of-3 signatures collected at *approval* authorise a payment executing *later*? | Shapes Mon 8 | Test key quorum via `additional_signers` |
+| 4 | Can Privy enable Arc for native broadcast? | Would simplify the payment path | Email support@privy.io |
 
 ---
 
@@ -831,7 +971,7 @@ Collected across all four sponsors:
 - [ ] **Demo video, 2–4 minutes** — Graph's cap is tightest; cut to it and it serves all tracks
 - [ ] "Privy's role" section naming each primitive and where it's used
 - [ ] Working frontend **and** backend demonstrated (Arc requirement)
-- [ ] Graph limitations stated honestly (180-day window)
+- [ ] Graph usage described accurately (Token API, powered by The Graph; paginated at 10 items/request on free tier)
 - [ ] Deployed on Arc testnet, contracts verifiable
 - [ ] Arc mainnet deployment or deployment-ready by **30 Sep**
 - [ ] Submitted to: Privy ×2, Arc ×2, Graph ×1

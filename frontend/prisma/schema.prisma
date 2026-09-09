@@ -1,0 +1,532 @@
+// Procure — data model
+//
+// Money: every amount is `...Minor`, a BigInt count of USDC base units
+// (6 decimals). Never a float. See lib/units.ts for the discipline.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 moved connection URLs out of the schema.
+// Migrate reads them from prisma.config.ts; the client gets a driver
+// adapter (see lib/db.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Organisation & people
+// ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id   String @id @default(cuid())
+  name String
+
+  // Privy organization wallet — provisioned on first run, persisted here
+  // so restarts reuse it instead of spawning new wallets.
+  treasuryWalletId String?
+  treasuryAddress  String?
+  treasuryPolicyId String?
+
+  departments Department[]
+  users       User[]
+  vendors     Vendor[]
+  items       Item[]
+  accounts    Account[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id    String @id @default(cuid())
+  email String @unique
+  name  String
+
+  // Privy embedded wallet — approvers sign with this
+  walletId String?
+  address  String?
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  memberships     Membership[]
+  requests        PurchaseRequest[] @relation("Requester")
+  approvals       Approval[]
+  receiptsRecords GoodsReceipt[]
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+}
+
+enum Role {
+  CONTROLLER
+  APPROVER
+  REQUESTER
+}
+
+/// Role is per (user, department) — someone can request in Engineering
+/// and approve for Marketing.
+model Membership {
+  id String @id @default(cuid())
+
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  role         Role
+
+  @@unique([userId, departmentId, role])
+  @@index([departmentId])
+}
+
+model Department {
+  id   String @id @default(cuid())
+  name String
+  code String
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // Privy server wallet. Pre-funded to exactly the budget, so it
+  // physically cannot overspend.
+  walletId    String?
+  address     String?
+  policyId    String?
+  keyQuorumId String?
+
+  /// Period allocation in USDC base units
+  budgetMinor BigInt @default(0)
+
+  /// Cash account in the chart of accounts for this wallet
+  cashAccountCode String?
+
+  memberships Membership[]
+  requests    PurchaseRequest[]
+  orders      PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, code])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Masters
+// ─────────────────────────────────────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+model Account {
+  id      String      @id @default(cuid())
+  code    String
+  name    String
+  type    AccountType
+  subtype String?
+  active  Boolean     @default(true)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  items        Item[]
+  journalLines JournalLine[]
+
+  @@unique([orgId, code])
+}
+
+model Item {
+  id          String  @id @default(cuid())
+  code        String
+  name        String
+  description String?
+  unit        String  @default("unit")
+
+  /// Default rate in USDC base units
+  defaultRateMinor BigInt @default(0)
+
+  /// Drives automatic GL coding on PR lines
+  expenseAccountCode String?
+  expenseAccount     Account? @relation(fields: [expenseAccountId], references: [id])
+  expenseAccountId   String?
+
+  category String?
+  active   Boolean @default(true)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  lines PurchaseRequestLine[]
+
+  @@unique([orgId, code])
+}
+
+enum VendorStatus {
+  DRAFT
+  ACTIVE
+  BLOCKED
+}
+
+enum RiskBand {
+  UNSCREENED
+  BLOCKED
+  REVIEW
+  CLEAR
+}
+
+model Vendor {
+  id    String @id @default(cuid())
+  name  String
+  email String
+
+  /// Payout address — only enters the Privy allowlist after risk screening
+  payoutAddress String
+
+  paymentTerms    String       @default("Net 30")
+  category        String?
+  apAccountCode   String?
+  status          VendorStatus @default(DRAFT)
+
+  // Risk screening
+  riskScore       Int?
+  riskBand        RiskBand  @default(UNSCREENED)
+  riskAssessedAt  DateTime?
+  riskNarrative   String?
+  riskSignals     Json?
+  /// Set when a controller force-approves a BLOCKED address
+  overrideReason  String?
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  requests PurchaseRequest[]
+  orders   PurchaseOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Procure to pay
+// ─────────────────────────────────────────────────────────────
+
+enum PRStatus {
+  DRAFT
+  SUBMITTED
+  PRECHECK_FAILED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model PurchaseRequest {
+  id       String   @id @default(cuid())
+  prNumber String   @unique
+  status   PRStatus @default(DRAFT)
+
+  justification String?
+  /// Reason a pre-check or approver rejected it
+  rejectionReason String?
+
+  amountMinor BigInt @default(0)
+
+  requesterId  String
+  requester    User       @relation("Requester", fields: [requesterId], references: [id])
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  vendorId     String
+  vendor       Vendor     @relation(fields: [vendorId], references: [id])
+
+  lines     PurchaseRequestLine[]
+  approvals Approval[]
+  order     PurchaseOrder?
+
+  /// How many approvals this PR needs, snapshotted at submit time
+  approvalsRequired Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, departmentId])
+}
+
+model PurchaseRequestLine {
+  id          String @id @default(cuid())
+  description String
+  quantity    Int    @default(1)
+
+  unitRateMinor BigInt
+  amountMinor   BigInt
+
+  itemId String?
+  item   Item?   @relation(fields: [itemId], references: [id])
+
+  /// Snapshotted from the item so later master changes don't rewrite history
+  expenseAccountCode String?
+
+  requestId String
+  request   PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+model Approval {
+  id String @id @default(cuid())
+
+  requestId String
+  request   PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  approverId String
+  approver   User   @relation(fields: [approverId], references: [id])
+
+  approved Boolean
+  comment  String?
+
+  /// Privy authorization-key signature — an approval is a signature,
+  /// not a database row
+  signature String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([requestId, approverId])
+}
+
+enum POStatus {
+  ISSUED
+  VENDOR_ACCEPTED
+  VENDOR_REJECTED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id       String   @id @default(cuid())
+  poNumber String   @unique
+  status   POStatus @default(ISSUED)
+
+  amountMinor  BigInt
+  toleranceBps Int    @default(100)
+
+  /// Onchain PO registration on Arc
+  onchainTxHash String?
+  onchainPoId   String?
+
+  vendorResponseAt     DateTime?
+  vendorResponseReason String?
+
+  requestId String @unique
+  request   PurchaseRequest @relation(fields: [requestId], references: [id])
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  vendorId     String
+  vendor       Vendor     @relation(fields: [vendorId], references: [id])
+
+  receipt  GoodsReceipt?
+  invoice  VendorInvoice?
+  bill     Bill?
+  comments PoComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, departmentId])
+}
+
+model PoComment {
+  id      String @id @default(cuid())
+  body    String
+  /// "ORG" or "VENDOR"
+  author  String
+
+  orderId String
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model GoodsReceipt {
+  id        String @id @default(cuid())
+  grnNumber String @unique
+
+  receivedById String
+  receivedBy   User   @relation(fields: [receivedById], references: [id])
+
+  note String?
+
+  orderId String        @unique
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model VendorInvoice {
+  id                  String @id @default(cuid())
+  vendorInvoiceNumber String
+
+  invoicedAmountMinor BigInt
+
+  orderId String        @unique
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BillStatus {
+  RECEIVED
+  MATCHING
+  MATCH_FAILED
+  MATCHED
+  SCHEDULED
+  PAID
+  DISPUTED
+}
+
+/// Carries BOTH the PO amount and the vendor's invoiced amount.
+/// A bill generated purely from the PO would match itself by
+/// construction and the three-way match would be theatre.
+model Bill {
+  id         String     @id @default(cuid())
+  billNumber String     @unique
+  status     BillStatus @default(RECEIVED)
+
+  poAmountMinor       BigInt
+  invoicedAmountMinor BigInt
+
+  orderId String        @unique
+  order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  matches  MatchResult[]
+  payment  Payment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum MatchOutcome {
+  PASS
+  FAIL
+}
+
+model MatchResult {
+  id      String       @id @default(cuid())
+  outcome MatchOutcome
+  reason  String?
+
+  varianceMinor  BigInt
+  toleranceMinor BigInt
+
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+enum PaymentStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
+
+model Payment {
+  id     String        @id @default(cuid())
+  status PaymentStatus @default(PENDING)
+
+  amountMinor BigInt
+
+  fromAddress String
+  toAddress   String
+  txHash      String?
+  blockNumber BigInt?
+  failReason  String?
+
+  billId String @unique
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ledger
+// ─────────────────────────────────────────────────────────────
+
+model JournalEntry {
+  id          String   @id @default(cuid())
+  entryDate   DateTime @default(now())
+  memo        String?
+  /// "GOODS_RECEIPT" | "BILL" | "PAYMENT"
+  sourceType  String
+  sourceId    String
+  /// Reconciliation key — the payment carries its PO reference and the
+  /// journal entry carries the hash, so reconciliation is a join.
+  txHash      String?
+
+  lines JournalLine[]
+
+  createdAt DateTime @default(now())
+
+  @@index([sourceType, sourceId])
+}
+
+model JournalLine {
+  id String @id @default(cuid())
+
+  entryId String
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  debitMinor  BigInt @default(0)
+  creditMinor BigInt @default(0)
+
+  costCenter String?
+  memo       String?
+}
+
+// ─────────────────────────────────────────────────────────────
+// Notifications & audit
+// ─────────────────────────────────────────────────────────────
+
+/// Every email the workflow fires. Always written, even when the mailer
+/// is a no-op — this is the outbox panel we demo.
+model Notification {
+  id String @id @default(cuid())
+
+  event     String
+  recipient String
+  subject   String
+  body      String
+  template  String
+
+  sentAt     DateTime?
+  providerId String?
+  error      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([event, recipient, template])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id     String  @id @default(cuid())
+  actor  String
+  action String
+  target String
+  detail Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
