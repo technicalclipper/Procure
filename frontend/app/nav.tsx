@@ -31,6 +31,7 @@ const NAV = [
   {
     group: "Settings",
     links: [
+      { href: "/settings/people", label: "People & roles" },
       { href: "/settings/wallets", label: "Wallets & budgets" },
       { href: "/settings/outbox", label: "Outbox" },
     ],
