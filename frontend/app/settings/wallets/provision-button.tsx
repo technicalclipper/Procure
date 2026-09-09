@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { provisionAction, type ProvisionState } from "./actions";
+import { provisionAction, type ActionState } from "./actions";
 
 export function ProvisionButton({ missing }: { missing: number }) {
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<ProvisionState | null>(null);
+  const [result, setResult] = useState<ActionState & { created?: string[] } | null>(null);
 
   return (
     <div className="space-y-3">
@@ -34,7 +34,7 @@ export function ProvisionButton({ missing }: { missing: number }) {
                 Created {result.created.length}:
               </div>
               <ul className="space-y-0.5 mono">
-                {result.created.map((c) => (
+                {result.created.map((c: string) => (
                   <li key={c}>{c}</li>
                 ))}
               </ul>
