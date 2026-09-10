@@ -18,6 +18,32 @@
 export const NETWORKS = ["mainnet", "base", "arbitrum-one"] as const;
 export type Network = (typeof NETWORKS)[number];
 
+/**
+ * Stablecoin contracts per chain.
+ *
+ * Screening is done against these rather than all tokens. Any address
+ * accumulates airdrop spam — junk tokens pushed from dozens of senders —
+ * which fakes counterparty diversity and holdings. An unused vanity
+ * address scored a clean 100 on the unfiltered model.
+ *
+ * Filtering to stablecoins also happens to be the relevant question:
+ * we are about to pay this vendor in USDC, so their USDC history is what
+ * tells us whether they behave like a supplier.
+ */
+export const STABLECOINS: Record<Network, string[]> = {
+  mainnet: [
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
+  ],
+  base: [
+    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
+  ],
+  "arbitrum-one": [
+    "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC
+    "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", // USDT
+  ],
+};
+
 export type Transfer = {
   block_num: number;
   datetime: string;
@@ -96,6 +122,8 @@ export async function fetchTransfers(opts: {
   maxPages?: number;
   startTime?: number;
   endTime?: number;
+  /** Restrict to one token contract. Used to screen stablecoins only. */
+  contract?: string;
 }): Promise<Transfer[]> {
   const key = opts.direction === "in" ? "to_address" : "from_address";
   const out: Transfer[] = [];
@@ -104,6 +132,7 @@ export async function fetchTransfers(opts: {
     const rows = await get<Transfer>("/v1/evm/transfers", {
       network: opts.network,
       [key]: opts.address,
+      contract: opts.contract,
       limit: PAGE,
       page,
       start_time: opts.startTime,
@@ -113,6 +142,22 @@ export async function fetchTransfers(opts: {
     if (rows.length < PAGE) break;
   }
   return out;
+}
+
+/** Stablecoin transfers in one direction across every contract on a chain. */
+export async function fetchStableTransfers(opts: {
+  network: Network;
+  address: string;
+  direction: "in" | "out";
+  maxPages?: number;
+}): Promise<Transfer[]> {
+  const contracts = STABLECOINS[opts.network] ?? [];
+  const batches = await Promise.all(
+    contracts.map((contract) =>
+      fetchTransfers({ ...opts, contract }).catch(() => [] as Transfer[]),
+    ),
+  );
+  return batches.flat().sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export async function fetchBalances(
