@@ -1,4 +1,4 @@
-import { AccountType, RiskBand, VendorStatus } from "@prisma/client";
+import { AccountType, RiskBand, Role, VendorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
@@ -40,7 +40,7 @@ export default async function VendorsPage({
     db.membership.findFirst({
       where: {
         userId: user.id,
-        role: "PURCHASER",
+        role: Role.PURCHASER,
         department: { orgId: org.id },
       },
       select: { id: true },
