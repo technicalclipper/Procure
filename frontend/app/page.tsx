@@ -2,8 +2,11 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { getUserOrgs } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
+import { getPendingInvitations } from "@/lib/invitations";
+import { describeRole, titleCase } from "@/lib/mail/templates";
 import { SignInButton, SignOutButton, SyncOnLogin } from "./auth-buttons";
 import { CreateOrg } from "./create-org";
+import { AcceptButtons } from "./invite/invite-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +65,10 @@ export default async function Landing() {
     );
   }
 
-  const orgs = await getUserOrgs(user.id);
+  const [orgs, invitations] = await Promise.all([
+    getUserOrgs(user.id),
+    getPendingInvitations(user.email),
+  ]);
 
   return (
     <>
@@ -104,10 +110,60 @@ export default async function Landing() {
                 organisation.
               </p>
             </div>
-            {orgs.length > 0 && <CreateOrg variant="inline" />}
+            {(orgs.length > 0 || invitations.length > 0) && (
+              <CreateOrg variant="inline" />
+            )}
           </div>
 
-          {orgs.length === 0 ? (
+          {invitations.length > 0 && (
+            <section className="mt-6">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Pending invitations
+              </div>
+              <ul className="space-y-2">
+                {invitations.map((inv) => {
+                  const badge = inv.departmentName
+                    ? `${titleCase(inv.role ?? "")} · ${inv.departmentName}`
+                    : titleCase(inv.orgRole);
+                  return (
+                    <li
+                      key={inv.id}
+                      className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-medium text-slate-900">
+                              {inv.orgName}
+                            </span>
+                            <span className="inline-flex items-center rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                              {badge}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[12px] text-slate-600">
+                            {describeRole(
+                              inv.orgRole,
+                              inv.role,
+                              inv.departmentName,
+                            )}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            Invited by {inv.inviterName} · expires{" "}
+                            {inv.expiresAt.toLocaleDateString("en-GB")}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <AcceptButtons token={inv.token} compact />
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
+          {orgs.length === 0 && invitations.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
               <div className="text-[13px] font-medium text-slate-900">
                 You don&apos;t belong to any organisation yet
@@ -118,7 +174,7 @@ export default async function Landing() {
               </p>
               <CreateOrg variant="empty" />
             </div>
-          ) : (
+          ) : orgs.length === 0 ? null : (
             <ul className="mt-6 space-y-2">
               {orgs.map((org) => (
                 <li key={org.id}>
@@ -205,6 +261,3 @@ function Row({
   );
 }
 
-function titleCase(s: string) {
-  return s.charAt(0) + s.slice(1).toLowerCase();
-}
