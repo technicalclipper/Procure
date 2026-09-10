@@ -106,8 +106,18 @@ model OrgMember {
 
 /// Department-scoped role. Per (user, department) — the same person can
 /// raise requests in Engineering and approve for Marketing.
+///
+/// Requester, purchaser and approver are deliberately separate: the person
+/// who asks for something, the person who commits the org to buying it,
+/// and the person who signs it off should not be the same person. That
+/// separation is the control, not an org-chart detail.
 enum Role {
+  /// Raises purchase requests and confirms goods receipt.
   REQUESTER
+  /// Turns approved requests into purchase orders, handles vendors,
+  /// items and bills.
+  PURCHASER
+  /// Signs off on requests; counts toward quorum.
   APPROVER
 }
 

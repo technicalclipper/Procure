@@ -5,64 +5,73 @@ import { usePathname } from "next/navigation";
 
 export type NavCaps = {
   isAdmin: boolean;
+  isRequester: boolean;
+  isPurchaser: boolean;
   isApprover: boolean;
 };
 
 /**
- * `visible` decides who sees a link. This is presentation only — the
- * matching pages enforce the same rule server-side via requireOrgManage,
- * because anyone can type a URL.
+ * Who sees a link. Presentation only — the matching pages enforce the
+ * same rule server-side, because anyone can type a URL.
+ *
+ * "all" means any member of the org, including someone with no department
+ * role yet.
  */
-type Visible = "all" | "approver" | "admin";
+type Visible = "all" | "requester" | "purchaser" | "approver" | "admin";
 
 const NAV: {
   group: string;
-  links: { path: string; label: string; visible: Visible }[];
+  links: { path: string; label: string; visible: Visible[] }[];
 }[] = [
   {
     group: "Buy",
     links: [
-      { path: "requests", label: "Requests", visible: "all" },
-      { path: "approvals", label: "Approvals", visible: "approver" },
-      { path: "orders", label: "Purchase orders", visible: "all" },
-      { path: "bills", label: "Bills", visible: "admin" },
-      { path: "payments", label: "Payments", visible: "admin" },
+      // A purchaser needs to see requests to turn approved ones into POs.
+      { path: "requests", label: "Requests", visible: ["requester", "purchaser", "approver"] },
+      { path: "approvals", label: "Approvals", visible: ["approver"] },
+      { path: "orders", label: "Purchase orders", visible: ["purchaser", "requester"] },
+      { path: "bills", label: "Bills", visible: ["purchaser"] },
+      { path: "payments", label: "Payments", visible: ["admin"] },
     ],
   },
   {
     group: "Master data",
     links: [
-      { path: "vendors", label: "Vendors", visible: "all" },
-      { path: "items", label: "Items", visible: "all" },
-      { path: "accounts", label: "Chart of accounts", visible: "admin" },
+      { path: "vendors", label: "Vendors", visible: ["purchaser", "requester", "approver"] },
+      { path: "items", label: "Items", visible: ["purchaser", "requester", "approver"] },
+      { path: "accounts", label: "Chart of accounts", visible: ["admin"] },
     ],
   },
   {
     group: "Finance",
     links: [
-      { path: "ledger", label: "Journal", visible: "admin" },
-      { path: "trial-balance", label: "Trial balance", visible: "admin" },
+      { path: "ledger", label: "Journal", visible: ["admin"] },
+      { path: "trial-balance", label: "Trial balance", visible: ["admin"] },
     ],
   },
   {
     group: "Settings",
     links: [
-      { path: "settings/people", label: "People & roles", visible: "admin" },
+      { path: "settings/people", label: "People & roles", visible: ["admin"] },
       {
         path: "settings/departments",
         label: "Departments & budgets",
-        visible: "admin",
+        visible: ["admin"],
       },
-      { path: "settings/outbox", label: "Outbox", visible: "admin" },
+      { path: "settings/outbox", label: "Outbox", visible: ["admin"] },
     ],
   },
 ];
 
-function canSee(v: Visible, caps: NavCaps) {
+function canSee(visible: Visible[], caps: NavCaps) {
   if (caps.isAdmin) return true;
-  if (v === "all") return true;
-  if (v === "approver") return caps.isApprover;
-  return false;
+  return visible.some(
+    (v) =>
+      v === "all" ||
+      (v === "requester" && caps.isRequester) ||
+      (v === "purchaser" && caps.isPurchaser) ||
+      (v === "approver" && caps.isApprover),
+  );
 }
 
 export function OrgNav({ slug, caps }: { slug: string; caps: NavCaps }) {
