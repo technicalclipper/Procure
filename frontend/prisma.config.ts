@@ -16,6 +16,5 @@ export default defineConfig({
     url: env("DIRECT_URL"),
   },
   migrations: {
-    seed: "tsx prisma/seed.ts",
   },
 });
