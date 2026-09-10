@@ -31,7 +31,10 @@ const NAV: {
       { path: "approvals", label: "Approvals", visible: ["approver"] },
       { path: "orders", label: "Purchase orders", visible: ["purchaser", "requester"] },
       { path: "bills", label: "Bills", visible: ["purchaser"] },
-      { path: "payments", label: "Payments", visible: ["admin"] },
+      // Read-only for a purchaser: they field "has my invoice been paid?".
+      // Segregation of duties applies to releasing funds, not to seeing
+      // the record — and nothing releases manually anyway, the match does.
+      { path: "payments", label: "Payments", visible: ["purchaser"] },
     ],
   },
   {
