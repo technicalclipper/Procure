@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AccountType, OrgRole } from "@prisma/client";
+import { AccountType, OrgRole, Role } from "@prisma/client";
 import { db } from "./db";
 import { getSessionUser, type SessionUser } from "./session";
 import { slugify } from "./slug";
@@ -98,6 +98,31 @@ export async function requireOrgAccess(slug: string): Promise<OrgContext> {
     canManage:
       membership.orgRole === OrgRole.OWNER ||
       membership.orgRole === OrgRole.CONTROLLER,
+  };
+}
+
+/**
+ * Same as requireOrgAccess, but also requires OWNER or CONTROLLER.
+ *
+ * Hiding a link in the nav is presentation, not access control — anyone
+ * can type the URL. Admin-only pages call this so the guard lives with
+ * the page rather than with the menu.
+ */
+export async function requireOrgManage(slug: string): Promise<OrgContext> {
+  const ctx = await requireOrgAccess(slug);
+  if (!ctx.canManage) redirect(`/o/${slug}`);
+  return ctx;
+}
+
+/** What the signed-in user may see, used to build the nav. */
+export async function getOrgCapabilities(userId: string, orgId: string) {
+  const deptRoles = await db.membership.findMany({
+    where: { userId, department: { orgId } },
+    select: { role: true },
+  });
+  return {
+    isApprover: deptRoles.some((m) => m.role === Role.APPROVER),
+    isRequester: deptRoles.some((m) => m.role === Role.REQUESTER),
   };
 }
 

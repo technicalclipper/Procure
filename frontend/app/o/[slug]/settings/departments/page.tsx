@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireOrgAccess } from "@/lib/org";
+import { requireOrgManage } from "@/lib/org";
 import { usdcBalances, explorerAddress, shortAddress } from "@/lib/chain";
 import { formatUsd, formatAmount } from "@/lib/units";
 import {
@@ -17,7 +17,7 @@ export default async function DepartmentsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { org, canManage } = await requireOrgAccess(slug);
+  const { org, canManage } = await requireOrgManage(slug);
 
   const departments = await db.department.findMany({
     where: { orgId: org.id },

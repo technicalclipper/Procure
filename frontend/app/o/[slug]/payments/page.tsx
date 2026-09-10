@@ -1,4 +1,4 @@
-import { requireOrgAccess } from "@/lib/org";
+import { requireOrgManage } from "@/lib/org";
 import { NotBuilt } from "../not-built";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export default async function Page({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await requireOrgAccess(slug);
+  await requireOrgManage(slug);
   return (
     <NotBuilt
       slug={slug}
