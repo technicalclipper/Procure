@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireOrgManage } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
 import { InviteForm, RevokeInvitation } from "./invite-form";
+import { CopyLink } from "@/app/copy-link";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export default async function PeoplePage({
 }) {
   const { slug } = await params;
   const { org, user, canManage } = await requireOrgManage(slug);
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  ).replace(/\/+$/, "");
 
   const [members, departments, invitations] = await Promise.all([
     db.orgMember.findMany({
@@ -115,6 +119,12 @@ export default async function PeoplePage({
                       <div className="text-[11px] text-slate-500">
                         invited by {inv.invitedBy.name ?? inv.invitedBy.email} ·
                         expires {inv.expiresAt.toLocaleDateString("en-GB")}
+                      </div>
+                      <div className="max-w-md">
+                        <CopyLink
+                          tone="slate"
+                          link={`${appUrl}/invite/${inv.token}`}
+                        />
                       </div>
                     </td>
                     <td className="px-4 py-3">

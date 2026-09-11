@@ -12,6 +12,8 @@ export type ActionState = {
   ok: boolean;
   message?: string;
   error?: string;
+  /** Accept link, so it can be shared when email can't be delivered. */
+  link?: string;
 };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -204,14 +206,14 @@ export async function inviteAction(
       ? `${titleCase(deptRole ?? "")} in ${departmentName}`
       : titleCase(orgRoleRaw);
 
-    if (result.sent) {
-      return { ok: true, message: `Invitation emailed to ${email} — ${where}.` };
-    }
+    const link = `${appUrl()}/invite/${token}`;
+
     return {
       ok: true,
-      message: result.error
-        ? `Invitation created for ${email} (${where}). Email not sent: ${result.error}. It's in the outbox.`
-        : `Invitation created for ${email} (${where}). Email sending is off — it's in the outbox.`,
+      link,
+      message: result.sent
+        ? `Invitation emailed to ${email} — ${where}.`
+        : `Invitation ready for ${email} — ${where}. Share the link below; it's also in the outbox.`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
