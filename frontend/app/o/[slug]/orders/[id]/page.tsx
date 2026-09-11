@@ -7,6 +7,7 @@ import { formatUsd } from "@/lib/units";
 import { computeVariance } from "@/lib/procurement/match";
 import { CancelOrder, OrgCommentBox } from "../order-controls";
 import { ConfirmReceipt } from "../receipt-controls";
+import { RaiseBill } from "../../bills/bill-controls";
 import { PO_STATUS } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -111,6 +112,16 @@ export default async function OrderDetail({
           </div>
         </div>
       </header>
+
+      {order.receipt && order.invoice && !order.bill && canEdit && (
+        <div className="mb-4">
+          <RaiseBill
+            slug={slug}
+            orderId={order.id}
+            vendorName={order.vendor.name}
+          />
+        </div>
+      )}
 
       {awaitingReceipt && canReceive && (
         <div className="mb-4">
