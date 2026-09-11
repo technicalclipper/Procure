@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PRStatus } from "@prisma/client";
+import { PRStatus, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
@@ -11,6 +11,7 @@ import {
   readSnapshot,
 } from "@/lib/procurement/approvals";
 import { DecisionPanel } from "./decision";
+import { IssueOrderButton } from "../../orders/order-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function RequestDetail({
   params: Promise<{ slug: string; id: string }>;
 }) {
   const { slug, id } = await params;
-  const { org, user } = await requireOrgAccess(slug);
+  const { org, user, canManage } = await requireOrgAccess(slug);
 
   const pr = await db.purchaseRequest.findUnique({
     where: { id },
@@ -77,6 +78,17 @@ export default async function RequestDetail({
     canApproveAt(snapshot, pr.currentLevel, user.id) &&
     !pr.approvals.some((a) => a.approverId === user.id);
   const currentRung = ladder.find((l) => l.isCurrent);
+
+  const purchaser = await db.membership.findFirst({
+    where: {
+      userId: user.id,
+      role: Role.PURCHASER,
+      department: { orgId: org.id },
+    },
+    select: { id: true },
+  });
+  const canIssue =
+    (canManage || !!purchaser) && pr.status === "APPROVED" && !pr.order;
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
@@ -124,6 +136,12 @@ export default async function RequestDetail({
             levelLabel={`Level ${currentRung.level.position}${currentRung.level.name ? ` · ${currentRung.level.name}` : ""}`}
             remaining={currentRung.required - currentRung.given}
           />
+        </div>
+      )}
+
+      {canIssue && (
+        <div className="mb-4">
+          <IssueOrderButton slug={slug} requestId={pr.id} />
         </div>
       )}
 
