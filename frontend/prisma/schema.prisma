@@ -74,6 +74,8 @@ model Organization {
   vendors     Vendor[]
   items       Item[]
   accounts    Account[]
+  requests    PurchaseRequest[]
+  orders      PurchaseOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -337,8 +339,15 @@ enum PRStatus {
 }
 
 model PurchaseRequest {
-  id       String   @id @default(cuid())
-  prNumber String   @unique
+  id String @id @default(cuid())
+
+  /// Denormalised from department. Numbers are per-organisation, and every
+  /// list on the buy side is org-scoped — joining through department for
+  /// all of them would be noise.
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  prNumber String
   status   PRStatus @default(DRAFT)
 
   justification   String?
@@ -363,7 +372,9 @@ model PurchaseRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([orgId, prNumber])
   @@index([status, departmentId])
+  @@index([orgId, status])
 }
 
 model PurchaseRequestLine {
@@ -414,8 +425,12 @@ enum POStatus {
 }
 
 model PurchaseOrder {
-  id       String   @id @default(cuid())
-  poNumber String   @unique
+  id String @id @default(cuid())
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  poNumber String
   status   POStatus @default(ISSUED)
 
   amountMinor  BigInt
@@ -443,7 +458,9 @@ model PurchaseOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([orgId, poNumber])
   @@index([status, departmentId])
+  @@index([orgId, status])
 }
 
 model PoComment {
