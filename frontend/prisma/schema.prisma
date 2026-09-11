@@ -43,6 +43,7 @@ model User {
   approvals         Approval[]
   receipts          GoodsReceipt[]
   invitationsSent   Invitation[]      @relation("InvitedBy")
+  vendorPortals     Vendor[]          @relation("VendorPortalUser")
   organizationsOwned Organization[]   @relation("OrgOwner")
 
   createdAt DateTime @default(now())
@@ -264,6 +265,14 @@ enum VendorStatus {
   BLOCKED
 }
 
+/// Whether the vendor has claimed access to their own portal.
+/// Separate from VendorStatus, which is about being payable.
+enum VendorPortalStatus {
+  NOT_INVITED
+  INVITED
+  ACTIVE
+}
+
 enum RiskBand {
   UNSCREENED
   BLOCKED
@@ -291,6 +300,16 @@ model Vendor {
   riskSignals    Json?
   /// Set when a controller force-approves a BLOCKED address
   overrideReason String?
+
+  // Vendor portal access. The invite is matched on email at accept time,
+  // the same way org invitations are — a token proves you received the
+  // link, not that you are the vendor.
+  portalStatus      VendorPortalStatus @default(NOT_INVITED)
+  portalToken       String?            @unique
+  portalInvitedAt   DateTime?
+  portalActivatedAt DateTime?
+  portalUserId      String?
+  portalUser        User?              @relation("VendorPortalUser", fields: [portalUserId], references: [id])
 
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)

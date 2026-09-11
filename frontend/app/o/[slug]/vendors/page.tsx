@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
 import { AddVendor, VendorStatusControl } from "./vendor-controls";
+import { PortalStatusPill } from "./portal-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,7 @@ export default async function VendorsPage({
                 <Th>Payout address</Th>
                 <Th>Terms</Th>
                 <Th>Risk</Th>
+                <Th>Portal</Th>
                 <Th>Status</Th>
                 <Th align="right" />
               </tr>
@@ -159,6 +161,10 @@ export default async function VendorsPage({
                           : `${titleCase(v.riskBand)} — screen`}
                       </Pill>
                     </Link>
+                  </td>
+
+                  <td className="px-4 py-3 align-top">
+                    <PortalStatusPill status={v.portalStatus} />
                   </td>
 
                   <td className="px-4 py-3 align-top">
