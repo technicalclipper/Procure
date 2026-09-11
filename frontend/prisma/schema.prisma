@@ -44,6 +44,7 @@ model User {
   receipts          GoodsReceipt[]
   invitationsSent   Invitation[]      @relation("InvitedBy")
   vendorPortals     Vendor[]          @relation("VendorPortalUser")
+  approvalLevels    ApprovalLevelApprover[]
   organizationsOwned Organization[]   @relation("OrgOwner")
 
   createdAt DateTime @default(now())
@@ -74,8 +75,9 @@ model Organization {
   vendors     Vendor[]
   items       Item[]
   accounts    Account[]
-  requests    PurchaseRequest[]
-  orders      PurchaseOrder[]
+  requests      PurchaseRequest[]
+  orders        PurchaseOrder[]
+  approvalFlows ApprovalFlow[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -329,6 +331,80 @@ model Vendor {
 // Procure to pay
 // ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// Approval configuration
+// ─────────────────────────────────────────────────────────────
+
+enum ApprovalModule {
+  PURCHASE_REQUEST
+  BILL
+}
+
+enum ApprovalMode {
+  /// Any single approver at this level is enough.
+  ANY_ONE
+  /// Every named approver must sign.
+  ALL
+  /// N of the named approvers must sign.
+  QUORUM
+}
+
+/// Per-organisation, per-module approval configuration.
+///
+/// Disabled means the module needs no approval at all — which is a real
+/// choice for a small team, not a degenerate case.
+model ApprovalFlow {
+  id String @id @default(cuid())
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  module  ApprovalModule
+  enabled Boolean @default(true)
+
+  levels ApprovalLevel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, module])
+}
+
+/// One rung of the ladder. Levels apply in order, and only those whose
+/// threshold the amount meets are used.
+model ApprovalLevel {
+  id String @id @default(cuid())
+
+  flowId String
+  flow   ApprovalFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  /// 1, 2, 3 … evaluated in ascending order
+  position Int
+  name     String?
+
+  /// Applies when the amount is at or above this
+  minAmountMinor BigInt @default(0)
+
+  mode        ApprovalMode @default(ANY_ONE)
+  quorumCount Int          @default(1)
+
+  approvers ApprovalLevelApprover[]
+
+  @@unique([flowId, position])
+}
+
+model ApprovalLevelApprover {
+  id String @id @default(cuid())
+
+  levelId String
+  level   ApprovalLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([levelId, userId])
+}
+
 enum PRStatus {
   DRAFT
   SUBMITTED
@@ -368,6 +444,13 @@ model PurchaseRequest {
 
   /// Snapshotted at submit time so later policy changes don't move the bar
   approvalsRequired Int @default(0)
+
+  /// The applicable levels, frozen at submit. If an admin edits the flow
+  /// while this is in flight, the bar it was submitted under is the bar it
+  /// clears — otherwise the audit trail can't be reconstructed.
+  flowSnapshot Json?
+  /// Which level is currently collecting signatures (1-based).
+  currentLevel Int  @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

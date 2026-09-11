@@ -1,6 +1,7 @@
-import { POStatus, PRStatus, RiskBand, VendorStatus } from "@prisma/client";
+import { ApprovalModule, POStatus, PRStatus, RiskBand, VendorStatus } from "@prisma/client";
 import { db } from "../db";
 import { type Usdc6, asUsdc6, formatUsd } from "../units";
+import { snapshotFlow, totalRequired } from "./approval-flow";
 
 /**
  * Pre-checks run before a purchase request can be submitted.
@@ -73,12 +74,14 @@ export async function runPreChecks(input: {
 }): Promise<CheckResult[]> {
   const checks: CheckResult[] = [];
 
-  const [vendor, dept, approvers] = await Promise.all([
+  const [vendor, dept, flow] = await Promise.all([
     db.vendor.findUnique({ where: { id: input.vendorId } }),
     db.department.findUnique({ where: { id: input.departmentId } }),
-    db.membership.count({
-      where: { departmentId: input.departmentId, role: "APPROVER" },
-    }),
+    snapshotFlow(
+      input.orgId,
+      ApprovalModule.PURCHASE_REQUEST,
+      BigInt(input.amountMinor),
+    ),
   ]);
 
   // Vendor is payable
@@ -158,43 +161,55 @@ export async function runPreChecks(input: {
     });
   }
 
-  // Someone can actually approve it
-  checks.push({
-    key: "approvers",
-    label: "Approver cover",
-    passed: approvers > 0,
-    detail:
-      approvers > 0
-        ? `${approvers} approver${approvers === 1 ? "" : "s"} in this department.`
-        : "No approvers in this department — a request raised here could never be approved.",
-  });
+  // Someone can actually approve it, per the org's configured flow.
+  // An org that has turned approval off for this module needs nobody.
+  if (!flow.enabled) {
+    checks.push({
+      key: "approvers",
+      label: "Approval route",
+      passed: true,
+      detail: "Approval is off for purchase requests — this is approved on submit.",
+    });
+  } else if (flow.levels.length === 0) {
+    checks.push({
+      key: "approvers",
+      label: "Approval route",
+      passed: true,
+      detail: "No approval level applies at this amount — approved on submit.",
+    });
+  } else {
+    const empty = flow.levels.filter((l) => l.approverIds.length === 0);
+    checks.push({
+      key: "approvers",
+      label: "Approval route",
+      passed: empty.length === 0,
+      detail:
+        empty.length === 0
+          ? `${totalRequired(flow)} approval${totalRequired(flow) === 1 ? "" : "s"} across ${flow.levels.length} level${flow.levels.length === 1 ? "" : "s"}.`
+          : `Level ${empty.map((l) => l.position).join(", ")} has no approvers assigned, so this would stall. Fix it in Settings → Approval flows.`,
+    });
+  }
 
   return checks;
 }
 
 /**
- * How many approvals this request needs, snapshotted at submit time.
+ * How many approvals this request needs, from the org's configured flow.
  *
- * Snapshotting matters: if a controller changes the thresholds while a
- * request is in flight, the bar it was submitted under is the bar it
- * should clear. Otherwise the audit trail cannot be reconstructed.
+ * Replaces the old env-var thresholds: approval is a per-organisation,
+ * per-module decision, and an org that wants none should not be forced
+ * through one.
  */
-export function approvalsRequiredFor(amountMinor: bigint): number {
-  const auto = BigInt(process.env.APPROVAL_AUTO_BELOW ?? 1000) * 1_000_000n;
-  const quorumAbove =
-    BigInt(process.env.APPROVAL_QUORUM_ABOVE ?? 10_000) * 1_000_000n;
-  const quorum = Number(process.env.APPROVAL_QUORUM_REQUIRED ?? 2);
-
-  if (amountMinor < auto) return 0;
-  if (amountMinor < quorumAbove) return 1;
-  return quorum;
-}
-
-export function routingSummary(amountMinor: bigint): string {
-  const n = approvalsRequiredFor(amountMinor);
-  if (n === 0) return "Under the approval threshold — approved automatically.";
-  if (n === 1) return "Needs one approval.";
-  return `Needs ${n} approvals.`;
+export async function approvalsRequiredFor(
+  orgId: string,
+  amountMinor: bigint,
+): Promise<number> {
+  const flow = await snapshotFlow(
+    orgId,
+    ApprovalModule.PURCHASE_REQUEST,
+    amountMinor,
+  );
+  return totalRequired(flow);
 }
 
 export const OPEN_PR_STATUSES = [

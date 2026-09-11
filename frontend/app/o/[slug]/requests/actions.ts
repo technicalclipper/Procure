@@ -1,16 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { PRStatus, Role } from "@prisma/client";
+import { ApprovalModule, PRStatus, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { parseUsd } from "@/lib/units";
 import { nextPrNumber, withNumberRetry } from "@/lib/procurement/numbering";
+import { runPreChecks, type CheckResult } from "@/lib/procurement/precheck";
 import {
-  approvalsRequiredFor,
-  runPreChecks,
-  type CheckResult,
-} from "@/lib/procurement/precheck";
+  snapshotFlow,
+  totalRequired,
+} from "@/lib/procurement/approval-flow";
 
 export type CreateResult =
   | { ok: true; id: string; prNumber: string; checks: CheckResult[] }
@@ -109,9 +109,14 @@ export async function createRequestAction(
       };
     }
 
-    // Snapshot the bar at submit time — changing thresholds later must not
-    // move the bar under a request already in flight.
-    const approvalsRequired = approvalsRequiredFor(amountMinor);
+    // Freeze the applicable levels at submit — editing the flow later must
+    // not move the bar under a request already in flight.
+    const flow = await snapshotFlow(
+      org.id,
+      ApprovalModule.PURCHASE_REQUEST,
+      amountMinor,
+    );
+    const approvalsRequired = totalRequired(flow);
 
     // Resolve GL codes from the items now, so later master edits don't
     // rewrite what this request was coded to.
@@ -137,6 +142,8 @@ export async function createRequestAction(
           justification,
           amountMinor,
           approvalsRequired,
+          flowSnapshot: flow as unknown as object,
+          currentLevel: 1,
           requesterId: user.id,
           departmentId,
           vendorId,
@@ -185,11 +192,9 @@ export async function previewChecksAction(
   } catch {
     amountMinor = 0n;
   }
-  const checks = await runPreChecks({
-    orgId: org.id,
-    departmentId,
-    vendorId,
-    amountMinor,
-  });
-  return { checks, approvalsRequired: approvalsRequiredFor(amountMinor) };
+  const [checks, flow] = await Promise.all([
+    runPreChecks({ orgId: org.id, departmentId, vendorId, amountMinor }),
+    snapshotFlow(org.id, ApprovalModule.PURCHASE_REQUEST, amountMinor),
+  ]);
+  return { checks, approvalsRequired: totalRequired(flow) };
 }
