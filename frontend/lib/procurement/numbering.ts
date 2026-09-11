@@ -31,6 +31,16 @@ export async function nextPoNumber(orgId: string): Promise<string> {
   return format("PO", n + 1);
 }
 
+export async function nextGrnNumber(orgId: string): Promise<string> {
+  const n = await db.goodsReceipt.count({ where: { orgId } });
+  return format("GRN", n + 1);
+}
+
+export async function nextBillNumber(orgId: string): Promise<string> {
+  const n = await db.bill.count({ where: { orgId } });
+  return format("BILL", n + 1);
+}
+
 /**
  * Run a create that assigns a generated number, retrying if another
  * request took the same one first.

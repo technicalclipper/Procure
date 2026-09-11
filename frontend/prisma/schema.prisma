@@ -77,6 +77,9 @@ model Organization {
   accounts    Account[]
   requests      PurchaseRequest[]
   orders        PurchaseOrder[]
+  receipts      GoodsReceipt[]
+  vendorInvoices VendorInvoice[]
+  bills         Bill[]
   approvalFlows ApprovalFlow[]
 
   createdAt DateTime @default(now())
@@ -320,6 +323,7 @@ model Vendor {
 
   requests PurchaseRequest[]
   orders   PurchaseOrder[]
+  invoices VendorInvoice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -563,9 +567,17 @@ model PoComment {
   createdAt DateTime @default(now())
 }
 
+/// Confirmation that what was ordered actually arrived.
+///
+/// The leg of the three-way match that nobody can fake from a desk: the
+/// buyer's own people say the goods are here. Raised by the requesting
+/// side, never by whoever pays.
 model GoodsReceipt {
   id        String @id @default(cuid())
-  grnNumber String @unique
+  grnNumber String
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   receivedById String
   receivedBy   User   @relation(fields: [receivedById], references: [id])
@@ -576,6 +588,9 @@ model GoodsReceipt {
   order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+
+  @@unique([orgId, grnNumber])
+  @@index([orgId])
 }
 
 model VendorInvoice {
@@ -583,12 +598,25 @@ model VendorInvoice {
   vendorInvoiceNumber String
 
   invoicedAmountMinor BigInt
+  note                String?
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// Denormalised so the duplicate-invoice index can key on the supplier.
+  /// Two vendors may both send INV-001 legitimately; the same vendor
+  /// sending it twice is what this is here to stop.
+  vendorId String
+  vendor   Vendor @relation(fields: [vendorId], references: [id])
 
   orderId String        @unique
   order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, vendorInvoiceNumber])
+  @@index([orgId])
 }
 
 enum BillStatus {
@@ -606,8 +634,11 @@ enum BillStatus {
 /// three-way match would be theatre.
 model Bill {
   id         String     @id @default(cuid())
-  billNumber String     @unique
+  billNumber String
   status     BillStatus @default(RECEIVED)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   poAmountMinor       BigInt
   invoicedAmountMinor BigInt
@@ -620,6 +651,9 @@ model Bill {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([orgId, billNumber])
+  @@index([orgId, status])
 }
 
 enum MatchOutcome {

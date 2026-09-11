@@ -30,6 +30,9 @@ const NAV: {
       { path: "requests", label: "Requests", visible: ["requester", "purchaser", "approver"] },
       { path: "approvals", label: "Approvals", visible: ["approver"] },
       { path: "orders", label: "Purchase orders", visible: ["purchaser", "requester"] },
+      // Confirming receipt is the requester's job, so they need the list
+      // of what's outstanding. A purchaser sees it read-only.
+      { path: "receipts", label: "Goods receipts", visible: ["requester", "purchaser"] },
       { path: "bills", label: "Bills", visible: ["purchaser"] },
       // Read-only for a purchaser: they field "has my invoice been paid?".
       // Segregation of duties applies to releasing funds, not to seeing
