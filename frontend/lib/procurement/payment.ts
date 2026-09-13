@@ -11,6 +11,7 @@ import {
   sendFromTreasury,
 } from "../registry";
 import { runThreeWayMatch } from "./three-way";
+import { postPayment } from "../ledger/post";
 
 /**
  * Releasing money.
@@ -255,6 +256,10 @@ export async function payBill(billId: string): Promise<PayResult> {
         data: { status: BillStatus.PAID },
       }),
     ]);
+
+    // Dr Payables, Cr Cash — carrying the Arc hash, so reconciling the
+    // ledger against the chain is a join rather than an exercise.
+    await postPayment(payment.id);
 
     return {
       ok: true,
