@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BillStatus, MatchOutcome, Role } from "@prisma/client";
+import { MatchOutcome, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
@@ -54,6 +54,15 @@ export default async function BillDetail({
   // was when the bill was raised. The persisted MatchResult remains the
   // record of the decision; this is the current reading beside it.
   const current = runThreeWayMatch(bill.order);
+
+  // The verdict is the recorded MatchResult, not the bill's status.
+  // Status moves on to PAID once settled, and asking it whether the
+  // match passed makes a paid bill claim it failed — with five passing
+  // checks listed directly above the claim.
+  const matchPassed = latest
+    ? latest.outcome === MatchOutcome.PASS
+    : current.passed;
+  const paid = !!bill.payment?.txHash;
 
   // What Arc currently believes — signatures it would accept, the
   // threshold it holds. Read here so the button can state the position
@@ -116,7 +125,7 @@ export default async function BillDetail({
       {/* The verdict */}
       <div
         className={`rounded-lg border p-4 ${
-          bill.status === BillStatus.MATCHED
+          matchPassed
             ? "border-emerald-200 bg-emerald-50/60"
             : "border-red-200 bg-red-50/60"
         }`}
@@ -124,12 +133,10 @@ export default async function BillDetail({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div
             className={`text-[13px] font-medium ${
-              bill.status === BillStatus.MATCHED
-                ? "text-emerald-900"
-                : "text-red-900"
+              matchPassed ? "text-emerald-900" : "text-red-900"
             }`}
           >
-            Three-way match {bill.status === BillStatus.MATCHED ? "passed" : "failed"}
+            Three-way match {matchPassed ? "passed" : "failed"}
           </div>
           {latest && (
             <div className="text-[11px] text-slate-500">
@@ -165,14 +172,16 @@ export default async function BillDetail({
 
         <p
           className={`mt-3 border-t pt-3 text-[12px] leading-relaxed ${
-            bill.status === BillStatus.MATCHED
+            matchPassed
               ? "border-emerald-900/10 text-emerald-900"
               : "border-red-900/10 text-red-900"
           }`}
         >
-          {bill.status === BillStatus.MATCHED
-            ? "All three legs agree. This bill is payable — the match is the authorisation, so no further sign-off is needed."
-            : "Payment is blocked. Nothing can be paid against this bill until every check passes — this isn't a warning that can be clicked past."}
+          {paid
+            ? "All three legs agreed and this bill has been settled on Arc. The contract verified the approver signatures before releasing the funds."
+            : matchPassed
+              ? "All three legs agree. This bill is payable — the match is the authorisation, so no further sign-off is needed."
+              : "Payment is blocked. Nothing can be paid against this bill until every check passes — this isn't a warning that can be clicked past."}
         </p>
 
         {drifted && (
@@ -183,12 +192,12 @@ export default async function BillDetail({
           </div>
         )}
 
-        {canAct && !bill.payment && bill.status !== BillStatus.MATCHED && (
+        {canAct && !paid && !matchPassed && (
           <div className="mt-3">
             <RematchBill slug={slug} billId={bill.id} />
           </div>
         )}
-        {canAct && drifted && bill.status === BillStatus.MATCHED && (
+        {canAct && drifted && !paid && matchPassed && (
           <div className="mt-3">
             <RematchBill slug={slug} billId={bill.id} />
           </div>
@@ -274,7 +283,7 @@ export default async function BillDetail({
               )}
             </div>
           </div>
-        ) : bill.status === BillStatus.MATCHED && canAct ? (
+        ) : matchPassed && canAct ? (
           <PayBill
             slug={slug}
             billId={bill.id}
@@ -286,7 +295,7 @@ export default async function BillDetail({
           />
         ) : (
           <p className="text-[12px] leading-relaxed text-slate-600">
-            {bill.status === BillStatus.MATCHED
+            {matchPassed
               ? `Payable to ${shortAddress(bill.order.vendor.payoutAddress)} — a purchaser or controller releases it.`
               : "Unreachable while the match is failing. This isn't a disabled button; the contract has nothing to pay against."}
             {bill.payment?.failReason && (
