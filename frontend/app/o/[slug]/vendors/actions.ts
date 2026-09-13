@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { getAddress, isAddress } from "viem";
 import { AccountType, Role, VendorStatus } from "@prisma/client";
@@ -110,6 +112,8 @@ export async function createVendorAction(
       message: `${vendor.name} added as draft — screen the payout address before it can be paid.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -161,6 +165,8 @@ export async function setVendorStatusAction(
       message: `${head} Arc allowlist updated in ${sync.tx.hash.slice(0, 10)}…`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

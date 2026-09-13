@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { InvitationStatus, OrgRole, Role } from "@prisma/client";
@@ -103,6 +105,8 @@ export async function previewInvitationAction(
 
     return { ok: true, subject: rendered.subject, html: rendered.html };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -216,6 +220,8 @@ export async function inviteAction(
         : `Invitation ready for ${email} — ${where}. Share the link below; it's also in the outbox.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -242,6 +248,8 @@ export async function revokeInvitationAction(
     revalidatePath(`/o/${slug}/settings/people`);
     return { ok: true, message: `Invitation to ${inv.email} revoked.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

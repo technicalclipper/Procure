@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { RiskBand, Role, VendorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -104,6 +106,8 @@ export async function screenVendorAction(
     revalidatePath(`/o/${slug}/vendors/${vendorId}`);
     return { ok: true, payload };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -164,6 +168,8 @@ export async function approveVendorAction(
           : `${vendor.name} is now on the payment allowlist.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

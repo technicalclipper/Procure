@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { Role, VendorPortalStatus } from "@prisma/client";
@@ -107,6 +109,8 @@ export async function inviteVendorPortalAction(
         : `Invitation ready for ${vendor.email}. Share the link below — it's also in the outbox.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -138,6 +142,8 @@ export async function revokeVendorPortalAction(
     revalidatePath(`/o/${slug}/vendors/${vendorId}`);
     return { ok: true, message: `Portal access revoked for ${vendor.name}.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

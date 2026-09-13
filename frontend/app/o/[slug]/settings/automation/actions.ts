@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireOrgManage } from "@/lib/org";
@@ -54,6 +56,8 @@ export async function setAutoSettleAction(
         : "Settlement is manual again — a purchaser releases each payment.",
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -79,6 +83,8 @@ export async function retrySyncAction(slug: string): Promise<AutomationState> {
       message: `${report.succeeded} written, ${report.failures.length} still failing — ${report.failures.slice(0, 3).join("; ")}`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
