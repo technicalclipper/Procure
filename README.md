@@ -181,6 +181,14 @@ forge create src/ProcureRegistry.sol:ProcureRegistry \
 
 After deploying, set `NEXT_PUBLIC_REGISTRY_ADDRESS`, have the treasury call `registerOrg`, and approve the registry to spend USDC.
 
+## Automation
+
+Off by default, and per organisation: **settle on match**. When a bill passes the three-way match and Arc already holds enough approver signatures, the payment is submitted immediately rather than waiting for someone to press Pay.
+
+It grants no new power — the contract still verifies every signature, the allowlist and the budget, and still reverts. What it removes is the last human step that wasn't deciding anything. If the match passing and the signatures clearing really *are* the authorisation, a person pressing Pay afterwards is a fourth approval nobody designed.
+
+The switch refuses to turn on when no approver set is registered on chain, because the contract would refuse every settlement and the org would be left watching bills match while nothing happened. Every run is recorded, successes and failures alike — an automation you can't audit is one nobody will trust with money.
+
 ## Status
 
 Built: multi-tenant orgs, invitations, departments and budgets, chart of accounts, vendors with Graph risk screening, items, configurable approval flows, purchase requests, signed approvals, purchase orders, vendor portal, goods receipt, vendor invoicing, three-way match, and USDC settlement on Arc.

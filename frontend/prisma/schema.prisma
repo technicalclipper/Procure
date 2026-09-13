@@ -64,6 +64,11 @@ model Organization {
   ownerId String
   owner   User   @relation("OrgOwner", fields: [ownerId], references: [id])
 
+  /// Settle a bill the moment it matches, without waiting for someone
+  /// to press Pay. Off by default — see the migration for why it is a
+  /// statement about where authority lives rather than a convenience.
+  autoSettle Boolean @default(false)
+
   /// Privy organization wallet holding the org float.
   treasuryWalletId String?
   treasuryAddress  String?
@@ -81,9 +86,32 @@ model Organization {
   vendorInvoices VendorInvoice[]
   bills         Bill[]
   approvalFlows ApprovalFlow[]
+  automationRuns AutomationRun[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// What the automation did, successes and failures alike. An automation
+/// you cannot audit is one nobody will trust with money.
+model AutomationRun {
+  id String @id @default(cuid())
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  /// "AUTO_SETTLE" | "SYNC_RETRY" | "APPROVAL_REMINDER"
+  kind      String
+  subjectId String
+
+  succeeded Boolean
+  detail    String?
+  txHash    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([kind, subjectId])
 }
 
 /// Org-level standing. Department-scoped powers live in Membership.
