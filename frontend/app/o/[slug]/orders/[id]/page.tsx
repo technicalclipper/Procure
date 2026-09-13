@@ -104,6 +104,16 @@ export default async function OrderDetail({
           </div>
         </div>
         <div className="text-right">
+          <div className="mb-2 flex justify-end gap-2">
+            <a href={`/o/${slug}/orders/${order.id}/pdf`} target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+              Order PDF
+            </a>
+            {order.receipt && (
+              <a href={`/o/${slug}/orders/${order.id}/grn`} target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Receipt PDF
+              </a>
+            )}
+          </div>
           <div className="tabular text-[22px] font-semibold text-slate-900">
             {formatUsd(order.amountMinor)}
           </div>
