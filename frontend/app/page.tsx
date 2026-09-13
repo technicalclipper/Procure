@@ -56,6 +56,12 @@ export default async function Landing() {
             </div>
 
             <div className="flex items-center gap-4">
+              <Link
+                href="/demo"
+                className="hidden text-[12px] font-medium text-indigo-600 hover:text-indigo-700 sm:inline"
+              >
+                The pitch →
+              </Link>
               <a
                 href="https://github.com/technicalclipper/Procure"
                 target="_blank"
