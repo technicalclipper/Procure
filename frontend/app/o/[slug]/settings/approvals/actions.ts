@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { ApprovalMode, ApprovalModule } from "@prisma/client";
 import { db } from "@/lib/db";
+import { syncApprovers } from "@/lib/procurement/onchain";
 import { requireOrgManage } from "@/lib/org";
 import { parseUsd } from "@/lib/units";
 import { ensureFlow } from "@/lib/procurement/approval-flow";
@@ -168,10 +169,27 @@ export async function setLevelApproversAction(
       }),
     ]);
 
+    // The database is the intent; the chain is the enforcement. Push the
+    // set so this level can actually authorise a payment — a level the
+    // contract doesn't know about can collect signatures all day and
+    // still never release money.
+    const sync = await syncApprovers(org.id, levelId);
+
     revalidatePath(`/o/${slug}/settings/approvals`);
+
+    const who = `${valid.length} approver${valid.length === 1 ? "" : "s"} on this level.`;
+    if (!sync.ok) {
+      return {
+        ok: true,
+        message: `${who} Not yet registered on Arc — ${sync.error}. Save again to retry; until it lands this level cannot authorise payment.`,
+      };
+    }
+    if (sync.skipped) {
+      return { ok: true, message: `${who} ${sync.reason} — not registered on Arc.` };
+    }
     return {
       ok: true,
-      message: `${valid.length} approver${valid.length === 1 ? "" : "s"} on this level.`,
+      message: `${who} Registered on Arc in ${sync.tx.hash.slice(0, 10)}…`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
