@@ -89,6 +89,7 @@ contract ProcureRegistry {
     error NotAnApprover(address signer);
     error SignaturesUnsorted();
     error BelowThreshold(uint8 got, uint8 need);
+    error NoApproverSet();
     error BadSignature();
 
     constructor(address _usdc) {
@@ -205,6 +206,12 @@ contract ProcureRegistry {
         }
 
         uint8 need = threshold[org][level];
+        // An unconfigured level must not be a permissive one. Without
+        // this, threshold 0 makes `valid >= need` true for an empty
+        // signature array, and an org that never set up approvers could
+        // be drained by anyone who could call this. Default-open is the
+        // wrong default for spend authority.
+        if (need == 0) revert NoApproverSet();
         if (valid < need) revert BelowThreshold(valid, need);
 
         // Effects before interaction — paid and budget are written before

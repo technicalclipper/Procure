@@ -590,6 +590,11 @@
   },
   {
     "type": "error",
+    "name": "NoApproverSet",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotAdmin",
     "inputs": []
   },
