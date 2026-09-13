@@ -53,15 +53,23 @@ export function DecisionPanel({
         setSigning(true);
         try {
           const out = await signTypedData(typedData as never);
-          signature = typeof out === "string" ? out : (out as { signature: string }).signature;
+          signature =
+            typeof out === "string"
+              ? out
+              : (out as { signature: string }).signature;
+          if (!signature) throw new Error("Wallet returned no signature.");
         } catch (e) {
           setSigning(false);
+          const message = e instanceof Error ? e.message : String(e);
+          // Log the raw error — the wallet's own wording is the only
+          // thing that says which part of the payload it disliked, and
+          // a tidied-up message would throw that away.
+          console.error("[approve] signTypedData failed", e, typedData);
           setResult({
             ok: false,
-            error:
-              e instanceof Error && /reject|denied|cancel/i.test(e.message)
-                ? "You cancelled the signature — nothing was recorded."
-                : `Couldn't sign: ${e instanceof Error ? e.message : String(e)}`,
+            error: /reject|denied|cancel|closed/i.test(message)
+              ? "You cancelled the signature — nothing was recorded."
+              : `Your wallet wouldn't sign this: ${message}`,
           });
           return;
         }

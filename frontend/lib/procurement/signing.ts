@@ -42,13 +42,33 @@ export async function buildApprovalPayload(requestId: string) {
   );
 }
 
-/** Serialised for a client component — BigInt cannot cross the boundary. */
+/**
+ * Serialised for a client component — BigInt cannot cross the boundary.
+ *
+ * EIP712Domain is spelled out here. viem injects it when hashing, which
+ * is why server-side verification works without it, but a wallet gets
+ * this object handed straight to eth_signTypedData_v4, and the JSON-RPC
+ * schema requires the domain's own type to be declared. Leaving it to
+ * the library is the difference between a signing prompt and a rejected
+ * request.
+ */
 export async function buildApprovalPayloadForClient(requestId: string) {
   const t = await buildApprovalPayload(requestId);
   if (!t) return null;
   return {
     domain: t.domain as unknown as Record<string, unknown>,
-    types: t.types as unknown as Record<string, { name: string; type: string }[]>,
+    types: {
+      EIP712Domain: [
+        { name: "name", type: "string" },
+        { name: "version", type: "string" },
+        { name: "chainId", type: "uint256" },
+        { name: "verifyingContract", type: "address" },
+      ],
+      ...(t.types as unknown as Record<
+        string,
+        { name: string; type: string }[]
+      >),
+    },
     primaryType: t.primaryType,
     message: {
       poHash: t.message.poHash,
