@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { usdcBalances, explorerAddress, shortAddress } from "@/lib/chain";
 import { formatUsd } from "@/lib/units";
 import { ProvisionButton } from "./provision-button";
+import { AddDepartment } from "./add-department";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +196,8 @@ export default async function WalletsPage() {
             </tfoot>
           </table>
         </div>
+
+        <AddDepartment />
 
         {totalOnChain === 0n && missing === 0 && (
           <p className="mt-3 text-[12px] text-slate-500">
