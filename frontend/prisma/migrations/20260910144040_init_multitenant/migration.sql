@@ -1,5 +1,11 @@
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('CONTROLLER', 'APPROVER', 'REQUESTER');
+CREATE TYPE "OrgRole" AS ENUM ('OWNER', 'CONTROLLER', 'MEMBER');
+
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('REQUESTER', 'APPROVER');
+
+-- CreateEnum
+CREATE TYPE "InvitationStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REVOKED');
 
 -- CreateEnum
 CREATE TYPE "AccountType" AS ENUM ('ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE');
@@ -26,9 +32,24 @@ CREATE TYPE "MatchOutcome" AS ENUM ('PASS', 'FAIL');
 CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'SUBMITTED', 'CONFIRMED', 'FAILED');
 
 -- CreateTable
+CREATE TABLE "User" (
+    "id" TEXT NOT NULL,
+    "privyDid" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT,
+    "walletAddress" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Organization" (
     "id" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
     "treasuryWalletId" TEXT,
     "treasuryAddress" TEXT,
     "treasuryPolicyId" TEXT,
@@ -39,16 +60,14 @@ CREATE TABLE "Organization" (
 );
 
 -- CreateTable
-CREATE TABLE "User" (
+CREATE TABLE "OrgMember" (
     "id" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "walletId" TEXT,
-    "address" TEXT,
+    "userId" TEXT NOT NULL,
     "orgId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "orgRole" "OrgRole" NOT NULL DEFAULT 'MEMBER',
+    "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "OrgMember_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -59,6 +78,24 @@ CREATE TABLE "Membership" (
     "role" "Role" NOT NULL,
 
     CONSTRAINT "Membership_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Invitation" (
+    "id" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "orgId" TEXT NOT NULL,
+    "orgRole" "OrgRole" NOT NULL DEFAULT 'MEMBER',
+    "departmentId" TEXT,
+    "role" "Role",
+    "status" "InvitationStatus" NOT NULL DEFAULT 'PENDING',
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "invitedById" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "acceptedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Invitation_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -331,16 +368,34 @@ CREATE TABLE "AuditLog" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "User_privyDid_key" ON "User"("privyDid");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE INDEX "User_orgId_idx" ON "User"("orgId");
+CREATE UNIQUE INDEX "Organization_slug_key" ON "Organization"("slug");
+
+-- CreateIndex
+CREATE INDEX "OrgMember_orgId_idx" ON "OrgMember"("orgId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OrgMember_userId_orgId_key" ON "OrgMember"("userId", "orgId");
 
 -- CreateIndex
 CREATE INDEX "Membership_departmentId_idx" ON "Membership"("departmentId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Membership_userId_departmentId_role_key" ON "Membership"("userId", "departmentId", "role");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Invitation_token_key" ON "Invitation"("token");
+
+-- CreateIndex
+CREATE INDEX "Invitation_email_status_idx" ON "Invitation"("email", "status");
+
+-- CreateIndex
+CREATE INDEX "Invitation_orgId_status_idx" ON "Invitation"("orgId", "status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Department_orgId_code_key" ON "Department"("orgId", "code");
@@ -403,13 +458,28 @@ CREATE UNIQUE INDEX "Notification_event_recipient_template_key" ON "Notification
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Organization" ADD CONSTRAINT "Organization_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OrgMember" ADD CONSTRAINT "OrgMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "OrgMember" ADD CONSTRAINT "OrgMember_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Department" ADD CONSTRAINT "Department_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;

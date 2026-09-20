@@ -1,7 +1,10 @@
 // Procure — data model
 //
+// Multi-tenant. A User is a global identity keyed by their Privy DID and
+// may belong to many organisations. Everything else is org-scoped.
+//
 // Money: every amount is `...Minor`, a BigInt count of USDC base units
-// (6 decimals). Never a float. See lib/units.ts for the discipline.
+// (6 decimals). Never a float. See lib/units.ts.
 
 generator client {
   provider = "prisma-client-js"
@@ -15,21 +18,58 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Organisation & people
+// Identity
+// ─────────────────────────────────────────────────────────────
+
+/// A person. Global — not owned by any organisation.
+model User {
+  id String @id @default(cuid())
+
+  /// Privy DID (auth token claims.userId). The identity anchor: a row is
+  /// created the first time someone signs in, and matched by it thereafter.
+  privyDid String @unique
+
+  email String  @unique
+  name  String?
+
+  /// The user's own Privy embedded wallet. Approvers sign with this — the
+  /// key is theirs, not ours, which is what makes an approval a signature
+  /// rather than a row we could have written ourselves.
+  walletAddress String?
+
+  orgMemberships    OrgMember[]
+  deptMemberships   Membership[]
+  requests          PurchaseRequest[] @relation("Requester")
+  approvals         Approval[]
+  receipts          GoodsReceipt[]
+  invitationsSent   Invitation[]      @relation("InvitedBy")
+  organizationsOwned Organization[]   @relation("OrgOwner")
+
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Organisation & membership
 // ─────────────────────────────────────────────────────────────
 
 model Organization {
   id   String @id @default(cuid())
+  /// URL segment: /o/[slug]
+  slug String @unique
   name String
 
-  // Privy organization wallet — provisioned on first run, persisted here
-  // so restarts reuse it instead of spawning new wallets.
+  ownerId String
+  owner   User   @relation("OrgOwner", fields: [ownerId], references: [id])
+
+  /// Privy organization wallet holding the org float.
   treasuryWalletId String?
   treasuryAddress  String?
   treasuryPolicyId String?
 
+  members     OrgMember[]
   departments Department[]
-  users       User[]
+  invitations Invitation[]
   vendors     Vendor[]
   items       Item[]
   accounts    Account[]
@@ -38,36 +78,39 @@ model Organization {
   updatedAt DateTime @updatedAt
 }
 
-model User {
-  id    String @id @default(cuid())
-  email String @unique
-  name  String
+/// Org-level standing. Department-scoped powers live in Membership.
+enum OrgRole {
+  /// Created the org. Cannot be removed.
+  OWNER
+  /// Manages departments, budgets, masters, vendors and invitations.
+  CONTROLLER
+  /// Belongs to the org; actual powers come from department memberships.
+  MEMBER
+}
 
-  // Privy embedded wallet — approvers sign with this
-  walletId String?
-  address  String?
+model OrgMember {
+  id String @id @default(cuid())
 
-  orgId String
-  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId  String
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  memberships     Membership[]
-  requests        PurchaseRequest[] @relation("Requester")
-  approvals       Approval[]
-  receiptsRecords GoodsReceipt[]
+  orgRole OrgRole @default(MEMBER)
 
-  createdAt DateTime @default(now())
+  joinedAt DateTime @default(now())
 
+  @@unique([userId, orgId])
   @@index([orgId])
 }
 
+/// Department-scoped role. Per (user, department) — the same person can
+/// raise requests in Engineering and approve for Marketing.
 enum Role {
-  CONTROLLER
-  APPROVER
   REQUESTER
+  APPROVER
 }
 
-/// Role is per (user, department) — someone can request in Engineering
-/// and approve for Marketing.
 model Membership {
   id String @id @default(cuid())
 
@@ -81,6 +124,43 @@ model Membership {
   @@index([departmentId])
 }
 
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+/// An invitation is matched on email at accept time: whoever signs in with
+/// that address gets the org standing and department role chosen here.
+model Invitation {
+  id    String @id @default(cuid())
+  token String @unique
+
+  email String
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  orgRole OrgRole @default(MEMBER)
+
+  /// Optional department role granted on accept.
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  role         Role?
+
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
+
+  invitedById String
+  invitedBy   User   @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  @@index([email, status])
+  @@index([orgId, status])
+}
+
 model Department {
   id   String @id @default(cuid())
   name String
@@ -89,8 +169,8 @@ model Department {
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  // Privy server wallet. Pre-funded to exactly the budget, so it
-  // physically cannot overspend.
+  /// Privy server wallet, provisioned on creation. Pre-funded to exactly
+  /// its budget, so a department physically cannot overspend.
   walletId    String?
   address     String?
   policyId    String?
@@ -105,6 +185,7 @@ model Department {
   memberships Membership[]
   requests    PurchaseRequest[]
   orders      PurchaseOrder[]
+  invitations Invitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -151,7 +232,7 @@ model Item {
   /// Default rate in USDC base units
   defaultRateMinor BigInt @default(0)
 
-  /// Drives automatic GL coding on PR lines
+  /// Drives automatic GL coding on purchase request lines
   expenseAccountCode String?
   expenseAccount     Account? @relation(fields: [expenseAccountId], references: [id])
   expenseAccountId   String?
@@ -188,19 +269,18 @@ model Vendor {
   /// Payout address — only enters the Privy allowlist after risk screening
   payoutAddress String
 
-  paymentTerms    String       @default("Net 30")
-  category        String?
-  apAccountCode   String?
-  status          VendorStatus @default(DRAFT)
+  paymentTerms  String       @default("Net 30")
+  category      String?
+  apAccountCode String?
+  status        VendorStatus @default(DRAFT)
 
-  // Risk screening
-  riskScore       Int?
-  riskBand        RiskBand  @default(UNSCREENED)
-  riskAssessedAt  DateTime?
-  riskNarrative   String?
-  riskSignals     Json?
+  riskScore      Int?
+  riskBand       RiskBand  @default(UNSCREENED)
+  riskAssessedAt DateTime?
+  riskNarrative  String?
+  riskSignals    Json?
   /// Set when a controller force-approves a BLOCKED address
-  overrideReason  String?
+  overrideReason String?
 
   orgId String
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -232,8 +312,7 @@ model PurchaseRequest {
   prNumber String   @unique
   status   PRStatus @default(DRAFT)
 
-  justification String?
-  /// Reason a pre-check or approver rejected it
+  justification   String?
   rejectionReason String?
 
   amountMinor BigInt @default(0)
@@ -249,7 +328,7 @@ model PurchaseRequest {
   approvals Approval[]
   order     PurchaseOrder?
 
-  /// How many approvals this PR needs, snapshotted at submit time
+  /// Snapshotted at submit time so later policy changes don't move the bar
   approvalsRequired Int @default(0)
 
   createdAt DateTime @default(now())
@@ -288,8 +367,7 @@ model Approval {
   approved Boolean
   comment  String?
 
-  /// Privy authorization-key signature — an approval is a signature,
-  /// not a database row
+  /// Signature from the approver's own Privy wallet
   signature String?
 
   createdAt DateTime @default(now())
@@ -314,14 +392,13 @@ model PurchaseOrder {
   amountMinor  BigInt
   toleranceBps Int    @default(100)
 
-  /// Onchain PO registration on Arc
   onchainTxHash String?
   onchainPoId   String?
 
   vendorResponseAt     DateTime?
   vendorResponseReason String?
 
-  requestId String @unique
+  requestId String          @unique
   request   PurchaseRequest @relation(fields: [requestId], references: [id])
 
   departmentId String
@@ -341,10 +418,10 @@ model PurchaseOrder {
 }
 
 model PoComment {
-  id      String @id @default(cuid())
-  body    String
+  id   String @id @default(cuid())
+  body String
   /// "ORG" or "VENDOR"
-  author  String
+  author String
 
   orderId String
   order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -390,9 +467,9 @@ enum BillStatus {
   DISPUTED
 }
 
-/// Carries BOTH the PO amount and the vendor's invoiced amount.
-/// A bill generated purely from the PO would match itself by
-/// construction and the three-way match would be theatre.
+/// Carries BOTH the PO amount and the vendor's invoiced amount. A bill
+/// generated purely from the PO would match itself by construction and the
+/// three-way match would be theatre.
 model Bill {
   id         String     @id @default(cuid())
   billNumber String     @unique
@@ -404,8 +481,8 @@ model Bill {
   orderId String        @unique
   order   PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  matches  MatchResult[]
-  payment  Payment?
+  matches MatchResult[]
+  payment Payment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -461,15 +538,15 @@ model Payment {
 // ─────────────────────────────────────────────────────────────
 
 model JournalEntry {
-  id          String   @id @default(cuid())
-  entryDate   DateTime @default(now())
-  memo        String?
+  id        String   @id @default(cuid())
+  entryDate DateTime @default(now())
+  memo      String?
   /// "GOODS_RECEIPT" | "BILL" | "PAYMENT"
-  sourceType  String
-  sourceId    String
+  sourceType String
+  sourceId   String
   /// Reconciliation key — the payment carries its PO reference and the
   /// journal entry carries the hash, so reconciliation is a join.
-  txHash      String?
+  txHash String?
 
   lines JournalLine[]
 
@@ -498,8 +575,8 @@ model JournalLine {
 // Notifications & audit
 // ─────────────────────────────────────────────────────────────
 
-/// Every email the workflow fires. Always written, even when the mailer
-/// is a no-op — this is the outbox panel we demo.
+/// Every email the workflow fires. Always written, even when the mailer is
+/// a no-op — this is the outbox panel we demo.
 model Notification {
   id String @id @default(cuid())
 
@@ -520,7 +597,7 @@ model Notification {
 }
 
 model AuditLog {
-  id     String  @id @default(cuid())
+  id     String @id @default(cuid())
   actor  String
   action String
   target String
