@@ -120,16 +120,27 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   // An invited user may already exist as a row keyed on email but with no
   // DID yet — claim it rather than creating a duplicate.
   const byEmail = await db.user.findUnique({ where: { email } });
-  const user = byEmail
-    ? await db.user.update({
-        where: { id: byEmail.id },
-        data: { privyDid: did, walletAddress, lastSeenAt: new Date() },
-      })
-    : await db.user.create({
-        data: { privyDid: did, email, walletAddress },
-      });
+  if (byEmail) {
+    const claimed = await db.user.update({
+      where: { id: byEmail.id },
+      data: { privyDid: did, walletAddress, lastSeenAt: new Date() },
+    });
+    return toSession(claimed);
+  }
 
-  return toSession(user);
+  // Sign-in fires several requests at once (the page render plus the
+  // post-login refresh), so two can reach this point before either has
+  // committed. Let the unique index arbitrate and re-read the winner
+  // rather than trying to pre-check our way out of the race.
+  try {
+    const created = await db.user.create({
+      data: { privyDid: did, email, walletAddress },
+    });
+    return toSession(created);
+  } catch {
+    const winner = await db.user.findUnique({ where: { privyDid: did } });
+    return winner ? toSession(winner) : null;
+  }
 }
 
 function toSession(u: {

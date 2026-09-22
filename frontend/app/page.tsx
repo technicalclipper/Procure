@@ -1,8 +1,17 @@
+import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
+import { getUserOrgs } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
 import { SignInButton, SignOutButton, SyncOnLogin } from "./auth-buttons";
+import { CreateOrg } from "./create-org";
 
 export const dynamic = "force-dynamic";
+
+const ROLE_TONE: Record<string, string> = {
+  OWNER: "bg-violet-50 text-violet-700 ring-violet-600/20",
+  CONTROLLER: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
+  MEMBER: "bg-slate-100 text-slate-600 ring-slate-500/20",
+};
 
 export default async function Landing() {
   const user = await getSessionUser();
@@ -28,8 +37,8 @@ export default async function Landing() {
           <ul className="mt-8 space-y-2.5 text-[13px] text-slate-600">
             <Bullet>
               An invoice that doesn&apos;t match the purchase order{" "}
-              <span className="font-medium text-slate-900">cannot be paid</span>
-              {" "}— not by policy, by construction.
+              <span className="font-medium text-slate-900">cannot be paid</span>{" "}
+              — not by policy, by construction.
             </Bullet>
             <Bullet>
               Every department holds its own wallet, funded to exactly its
@@ -52,6 +61,8 @@ export default async function Landing() {
       </>
     );
   }
+
+  const orgs = await getUserOrgs(user.id);
 
   return (
     <>
@@ -83,32 +94,70 @@ export default async function Landing() {
         </header>
 
         <main className="mx-auto max-w-3xl px-8 py-10">
-          <h1 className="text-[19px] font-semibold tracking-tight">
-            Your organisations
-          </h1>
-          <p className="mt-1 text-[13px] text-slate-500">
-            Create one, or accept an invitation to join an existing
-            organisation.
-          </p>
-
-          <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
-            <div className="text-[13px] font-medium text-slate-900">
-              You don&apos;t belong to any organisation yet
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h1 className="text-[19px] font-semibold tracking-tight">
+                Your organisations
+              </h1>
+              <p className="mt-1 text-[13px] text-slate-500">
+                Create one, or accept an invitation to join an existing
+                organisation.
+              </p>
             </div>
-            <p className="mx-auto mt-1 max-w-sm text-[12px] text-slate-500">
-              Creating one sets up a treasury wallet and a starter chart of
-              accounts. You can add departments and invite people after.
-            </p>
-            <button
-              disabled
-              title="Arrives in the next step"
-              className="mt-5 rounded-md bg-slate-200 px-4 py-2 text-[13px] font-medium text-slate-500"
-            >
-              Create organisation
-            </button>
+            {orgs.length > 0 && <CreateOrg variant="inline" />}
           </div>
 
-          <div className="mt-8 rounded-lg border border-slate-200 bg-white p-4">
+          {orgs.length === 0 ? (
+            <div className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+              <div className="text-[13px] font-medium text-slate-900">
+                You don&apos;t belong to any organisation yet
+              </div>
+              <p className="mx-auto mt-1 max-w-sm text-[12px] text-slate-500">
+                Creating one sets up a treasury wallet and a starter chart of
+                accounts. You can add departments and invite people after.
+              </p>
+              <CreateOrg variant="empty" />
+            </div>
+          ) : (
+            <ul className="mt-6 space-y-2">
+              {orgs.map((org) => (
+                <li key={org.id}>
+                  <Link
+                    href={`/o/${org.slug}`}
+                    className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-medium text-slate-900">
+                          {org.name}
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${ROLE_TONE[org.orgRole]}`}
+                        >
+                          {titleCase(org.orgRole)}
+                        </span>
+                      </div>
+                      <div className="mono mt-0.5 text-[11px] text-slate-400">
+                        /o/{org.slug}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right text-[11px] text-slate-500">
+                      <div>
+                        {org._count.departments} department
+                        {org._count.departments === 1 ? "" : "s"}
+                      </div>
+                      <div>
+                        {org._count.members} member
+                        {org._count.members === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-10 rounded-lg border border-slate-200 bg-white p-4">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Signed in as
             </div>
@@ -154,4 +203,8 @@ function Row({
       </dd>
     </div>
   );
+}
+
+function titleCase(s: string) {
+  return s.charAt(0) + s.slice(1).toLowerCase();
 }
