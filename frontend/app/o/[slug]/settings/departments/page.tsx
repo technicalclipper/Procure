@@ -43,10 +43,25 @@ export default async function DepartmentsPage({
           Departments &amp; budgets
         </h1>
         <p className="mt-1 text-[13px] text-slate-500">
-          Each department holds its own Privy server wallet, funded to
-          exactly its budget — so it physically cannot overspend.
+          Each department holds its own Privy server wallet. Fund it to
+          exactly its budget and the balance itself becomes the ceiling.
         </p>
       </header>
+
+      {/*
+        Honest about what is actually enforced today. The budget becomes a
+        hard on-chain cap once the registry is deployed and each department
+        approves it for exactly the budget amount — the ERC-20 allowance
+        then caps cumulative spend regardless of what our code does.
+      */}
+      <div className="mb-6 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+        <span className="font-medium text-slate-900">
+          Budgets are pre-check limits today.
+        </span>{" "}
+        They become a hard on-chain ceiling when the payment registry is
+        deployed: each department will approve it for exactly its budget, so
+        the USDC contract caps cumulative spend on its own.
+      </div>
 
       {/* Treasury */}
       <section className="mb-6">

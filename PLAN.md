@@ -790,6 +790,21 @@ Org / department / user management · role per department · Privy wallets (trea
 
 > **The risk dashboard is core, not stretch.** It is the front gate of the whole product — every other control protects payments to whoever is already on the allowlist, so the question of *how an address gets there* is the one that matters most. It is also the entire basis of the Graph submission. Scheduled mid-week, never last.
 
+> ### ⚠️ Budgets are not enforced onchain yet
+>
+> Department budgets are currently **pre-check numbers in the database**. Of the four control layers, only the last is live today:
+>
+> | Layer | Enforces | Status |
+> |---|---|---|
+> | Privy policy | Which contract and method the wallet may call | not built |
+> | ProcureRegistry | Match passed, not already paid, vendor allowlisted | not built |
+> | **ERC-20 allowance = the budget** | **Cumulative spend cannot exceed budget** | **not built** |
+> | Wallet balance | Cannot spend funds that aren't there | live, if funded to budget |
+>
+> The allowance layer needs a deployed spender, so it ships **with the registry**, not before. When it does, setting or editing a budget becomes `deptWallet → USDC.approve(registry, budgetMinor)` — an onchain transaction — and every existing department needs its allowance backfilled on deploy.
+>
+> Until then the departments page says budgets are pre-check limits rather than claiming a ceiling that doesn't exist. Do not describe budgets as onchain-enforced in the demo until this lands.
+
 ### STRETCH — in this order
 
 1. PDF generation (5 templates)
