@@ -75,9 +75,14 @@ export default async function Landing() {
       <SyncOnLogin signedIn />
       <div className="min-h-screen">
         <header className="border-b border-slate-200 bg-white">
-          <div className="mx-auto flex max-w-3xl items-center justify-between px-8 py-4">
-            <div className="text-[15px] font-semibold tracking-tight">
-              Procure
+          <div className="mx-auto flex max-w-3xl items-center justify-between px-8 py-5">
+            <div>
+              <div className="text-[24px] font-semibold leading-none tracking-tight text-slate-900">
+                Procure
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                The approval is the payment.
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
