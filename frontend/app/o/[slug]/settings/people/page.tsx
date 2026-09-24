@@ -1,6 +1,6 @@
 import { InvitationStatus, OrgRole, Role } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireOrgAccess } from "@/lib/org";
+import { requireOrgManage } from "@/lib/org";
 import { explorerAddress, shortAddress } from "@/lib/chain";
 import { InviteForm, RevokeInvitation } from "./invite-form";
 
@@ -23,7 +23,7 @@ export default async function PeoplePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { org, user, canManage } = await requireOrgAccess(slug);
+  const { org, user, canManage } = await requireOrgManage(slug);
 
   const [members, departments, invitations] = await Promise.all([
     db.orgMember.findMany({

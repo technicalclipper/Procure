@@ -1,6 +1,6 @@
 import { AccountType } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireOrgAccess } from "@/lib/org";
+import { requireOrgManage } from "@/lib/org";
 import { AddAccount, ToggleAccount } from "./account-controls";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function AccountsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const { org, canManage } = await requireOrgAccess(slug);
+  const { org, canManage } = await requireOrgManage(slug);
 
   const accounts = await db.account.findMany({
     where: { orgId: org.id },
