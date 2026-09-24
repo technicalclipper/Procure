@@ -19,6 +19,7 @@ const ORG_ROLES = [
 const DEPT_ROLES = [
   { value: "", label: "— none —" },
   { value: "REQUESTER", label: "Requester" },
+  { value: "PURCHASER", label: "Purchaser" },
   { value: "APPROVER", label: "Approver" },
 ];
 

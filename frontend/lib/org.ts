@@ -121,8 +121,9 @@ export async function getOrgCapabilities(userId: string, orgId: string) {
     select: { role: true },
   });
   return {
-    isApprover: deptRoles.some((m) => m.role === Role.APPROVER),
     isRequester: deptRoles.some((m) => m.role === Role.REQUESTER),
+    isPurchaser: deptRoles.some((m) => m.role === Role.PURCHASER),
+    isApprover: deptRoles.some((m) => m.role === Role.APPROVER),
   };
 }
 

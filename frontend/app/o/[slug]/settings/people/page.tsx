@@ -14,6 +14,7 @@ const ORG_TONE: Record<OrgRole, string> = {
 
 const DEPT_TONE: Record<Role, string> = {
   APPROVER: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+  PURCHASER: "bg-sky-50 text-sky-700 ring-sky-600/20",
   REQUESTER: "bg-slate-100 text-slate-600 ring-slate-500/20",
 };
 

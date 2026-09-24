@@ -24,6 +24,7 @@ export default async function OrgLayout({
   const roleSummary = [
     canManage ? titleCase(orgRole) : null,
     caps.isApprover ? "Approver" : null,
+    caps.isPurchaser ? "Purchaser" : null,
     caps.isRequester ? "Requester" : null,
   ].filter(Boolean);
 
@@ -43,7 +44,12 @@ export default async function OrgLayout({
 
         <OrgNav
           slug={org.slug}
-          caps={{ isAdmin: canManage, isApprover: caps.isApprover }}
+          caps={{
+            isAdmin: canManage,
+            isRequester: caps.isRequester,
+            isPurchaser: caps.isPurchaser,
+            isApprover: caps.isApprover,
+          }}
         />
 
         <div className="mt-auto border-t border-slate-200 px-5 py-3">

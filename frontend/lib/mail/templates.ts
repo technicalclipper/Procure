@@ -50,7 +50,9 @@ export function describeRole(
   const dept =
     deptRole === "APPROVER"
       ? `Approver in ${departmentName} — signs off on purchase requests and counts toward quorum`
-      : `Requester in ${departmentName} — raises purchase requests and confirms goods receipt`;
+      : deptRole === "PURCHASER"
+        ? `Purchaser in ${departmentName} — turns approved requests into purchase orders, and handles vendors, items and bills`
+        : `Requester in ${departmentName} — raises purchase requests and confirms goods receipt`;
 
   return orgRole === "MEMBER" ? dept : `${org}. Also ${dept}`;
 }
