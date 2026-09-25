@@ -60,6 +60,11 @@ export type ScreeningResult = {
     balanceCount: number;
   };
   fetchedAt: string;
+  /**
+   * The transfers the signals were computed from. Returned so the
+   * counterparty graph can be built without fetching everything twice.
+   */
+  raw: { inbound: Transfer[]; outbound: Transfer[] };
 };
 
 const DAY = 86_400;
@@ -454,5 +459,6 @@ export async function screenAddress(
       balanceCount: stableBalances.length,
     },
     fetchedAt: new Date(now).toISOString(),
+    raw: { inbound: allInbound, outbound: allOutbound },
   };
 }
