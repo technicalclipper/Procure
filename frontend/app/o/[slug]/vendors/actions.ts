@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAddress, isAddress } from "viem";
-import { AccountType, VendorStatus } from "@prisma/client";
+import { AccountType, Role, VendorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 
@@ -28,7 +28,7 @@ async function requireVendorManage(slug: string) {
   const purchaser = await db.membership.findFirst({
     where: {
       userId: ctx.user.id,
-      role: "PURCHASER",
+      role: Role.PURCHASER,
       department: { orgId: ctx.org.id },
     },
     select: { id: true },
