@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { explorerAddress } from "@/lib/chain";
 import { RiskPanel } from "../risk-panel";
+import { PortalControls } from "../portal-controls";
 import type { ScreenPayload } from "../screen-actions";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,19 @@ export default async function VendorDetail({
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
           <span className="font-medium">Activated by override — </span>
           {vendor.overrideReason}
+        </div>
+      )}
+
+      {canScreen && (
+        <div className="mb-4">
+          <PortalControls
+            slug={slug}
+            vendorId={vendor.id}
+            status={vendor.portalStatus}
+            email={vendor.email}
+            invitedAt={vendor.portalInvitedAt?.toISOString() ?? null}
+            activatedAt={vendor.portalActivatedAt?.toISOString() ?? null}
+          />
         </div>
       )}
 
