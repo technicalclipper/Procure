@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CounterpartyGraph, GraphNode } from "@/lib/risk/network";
 
 // three.js touches window on import, so it can never run during SSR.
@@ -38,6 +38,25 @@ export function CounterpartyGraphView({
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [showDust, setShowDust] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Measure the container and pass the width explicitly.
+   *
+   * Without it the library falls back to window.innerWidth, so the canvas
+   * is wider than its box and the force simulation centres itself
+   * off-screen — the graph appears jammed against the right edge.
+   */
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setWidth(Math.floor(entry.contentRect.width));
+    });
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
 
   const data = useMemo(() => {
     const nodes = graph.nodes.filter((n) => showDust || !n.dustOnly);
@@ -100,11 +119,12 @@ export function CounterpartyGraphView({
         </div>
       </div>
 
-      <div ref={wrapRef} className="relative h-[380px] bg-slate-50">
+      <div ref={wrapRef} className="relative h-[380px] overflow-hidden bg-slate-50">
+        {width > 0 && (
         <ForceGraph3D
           graphData={data}
           backgroundColor="#f8fafc"
-          width={undefined}
+          width={width}
           height={380}
           nodeLabel={(n) => {
             const node = n as unknown as GraphNode;
@@ -135,6 +155,7 @@ export function CounterpartyGraphView({
           enableNodeDrag={false}
           showNavInfo={false}
         />
+        )}
 
         {hovered && (
           <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-slate-200 bg-white/95 px-3 py-2 shadow-sm">
