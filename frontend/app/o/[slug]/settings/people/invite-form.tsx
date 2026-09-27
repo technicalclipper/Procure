@@ -8,6 +8,7 @@ import {
   type ActionState,
 } from "./actions";
 import { describeRole, renderInvitationEmail } from "@/lib/mail/templates";
+import { CopyLink } from "@/app/copy-link";
 
 export type DeptOption = { id: string; name: string; code: string };
 
@@ -78,7 +79,8 @@ export function InviteForm({
         </button>
         {result?.ok && result.message && (
           <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
-            {result.message}
+            <div>{result.message}</div>
+            {result.link && <CopyLink link={result.link} />}
           </div>
         )}
       </div>
