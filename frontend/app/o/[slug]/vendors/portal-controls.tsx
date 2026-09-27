@@ -92,7 +92,8 @@ export function PortalControls({
 
       {result?.ok && result.message && (
         <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
-          {result.message}
+          <div>{result.message}</div>
+          {result.link && <CopyLink link={result.link} />}
         </div>
       )}
       {result && !result.ok && (
@@ -100,6 +101,35 @@ export function PortalControls({
           {result.error}
         </div>
       )}
+    </div>
+  );
+}
+
+function CopyLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <input
+        readOnly
+        value={link}
+        onFocus={(e) => e.currentTarget.select()}
+        className="mono min-w-0 flex-1 rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] text-slate-700"
+      />
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(link);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            // Clipboard can be blocked; the field is selectable either way.
+          }
+        }}
+        className="shrink-0 rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-50"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }

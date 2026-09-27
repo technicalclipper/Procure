@@ -12,6 +12,9 @@ export type PortalActionState = {
   ok: boolean;
   message?: string;
   error?: string;
+  /** The claim link, so it can be copied when email can't be delivered. */
+  link?: string;
+  emailed?: boolean;
 };
 
 function appUrl() {
@@ -80,6 +83,8 @@ export async function inviteVendorPortalAction(
       acceptUrl: `${appUrl()}/vendor/${token}`,
     });
 
+    const link = `${appUrl()}/vendor/${token}`;
+
     const sent = await sendEmail({
       event: `VENDOR_PORTAL_INVITE:${vendorId}`,
       recipient: vendor.email,
@@ -90,11 +95,16 @@ export async function inviteVendorPortalAction(
     revalidatePath(`/o/${slug}/vendors`);
     revalidatePath(`/o/${slug}/vendors/${vendorId}`);
 
+    // The link is always returned. Provider-level delivery is outside our
+    // control — an unverified sending domain, a bounce, a spam filter —
+    // and none of that should stop someone onboarding a supplier.
     return {
       ok: true,
+      emailed: sent.sent,
+      link,
       message: sent.sent
         ? `Portal invitation emailed to ${vendor.email}.`
-        : `Invitation created for ${vendor.email}${sent.error ? ` — not sent: ${sent.error}` : " — email sending is off"}. It's in the outbox.`,
+        : `Invitation ready for ${vendor.email}. Share the link below — it's also in the outbox.`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
