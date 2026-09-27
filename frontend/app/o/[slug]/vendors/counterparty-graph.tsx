@@ -36,7 +36,21 @@ export function CounterpartyGraphView({
   address: string;
 }) {
   const [hovered, setHovered] = useState<GraphNode | null>(null);
-  const [showDust, setShowDust] = useState(false);
+
+  const dustCount = graph.nodes.filter((n) => n.dustOnly).length;
+  const commercial = graph.nodes.filter(
+    (n) => n.kind !== "vendor" && !n.dustOnly,
+  ).length;
+
+  /*
+   * Show dust by default when there is barely any real trade.
+   *
+   * Hiding it is right for an established vendor, where dust is noise
+   * around a real business. But when an address has 3 commercial
+   * counterparties and 26 dust ones, the dust IS the finding — hiding it
+   * renders a nearly empty graph and buries the reason for the score.
+   */
+  const [showDust, setShowDust] = useState(commercial < 3 && dustCount > 0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   /*
@@ -74,11 +88,6 @@ export function CounterpartyGraphView({
     };
   }, [graph, showDust]);
 
-  const dustCount = graph.nodes.filter((n) => n.dustOnly).length;
-  const commercial = graph.nodes.filter(
-    (n) => n.kind !== "vendor" && !n.dustOnly,
-  ).length;
-
   if (graph.nodes.length <= 1) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-[12px] text-slate-500">
@@ -100,6 +109,11 @@ export function CounterpartyGraphView({
             {commercial === 1 ? "y" : "ies"}
             {dustCount > 0 && ` · ${dustCount} dust-only`}
             {graph.truncated && " · showing the largest 40"}
+            {dustCount > 0 && commercial < 3 && (
+              <span className="ml-1 text-amber-700">
+                — mostly dust, which is why the score is low
+              </span>
+            )}
           </div>
         </div>
 
@@ -113,7 +127,7 @@ export function CounterpartyGraphView({
                 onChange={(e) => setShowDust(e.target.checked)}
                 className="h-3 w-3"
               />
-              Show dust
+              Show dust ({dustCount})
             </label>
           )}
         </div>
