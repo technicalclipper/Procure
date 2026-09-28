@@ -5,6 +5,12 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
 import { budgetPosition } from "@/lib/procurement/precheck";
+import {
+  buildLadder,
+  canApproveAt,
+  readSnapshot,
+} from "@/lib/procurement/approvals";
+import { DecisionPanel } from "./decision";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +41,7 @@ export default async function RequestDetail({
   params: Promise<{ slug: string; id: string }>;
 }) {
   const { slug, id } = await params;
-  const { org } = await requireOrgAccess(slug);
+  const { org, user } = await requireOrgAccess(slug);
 
   const pr = await db.purchaseRequest.findUnique({
     where: { id },
@@ -54,6 +60,23 @@ export default async function RequestDetail({
   const budget = await budgetPosition(pr.departmentId);
   const given = pr.approvals.filter((a) => a.approved).length;
   const s = STATUS[pr.status];
+
+  const snapshot = readSnapshot(pr.flowSnapshot);
+  const ladder = buildLadder(
+    snapshot,
+    pr.currentLevel,
+    pr.approvals.map((a) => ({
+      level: a.level,
+      approved: a.approved,
+      approverId: a.approverId,
+      name: a.approver.name ?? a.approver.email,
+    })),
+  );
+  const myTurn =
+    pr.status === "PENDING_APPROVAL" &&
+    canApproveAt(snapshot, pr.currentLevel, user.id) &&
+    !pr.approvals.some((a) => a.approverId === user.id);
+  const currentRung = ladder.find((l) => l.isCurrent);
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
@@ -92,6 +115,17 @@ export default async function RequestDetail({
           </div>
         </div>
       </header>
+
+      {myTurn && currentRung && (
+        <div className="mb-4">
+          <DecisionPanel
+            slug={slug}
+            requestId={pr.id}
+            levelLabel={`Level ${currentRung.level.position}${currentRung.level.name ? ` · ${currentRung.level.name}` : ""}`}
+            remaining={currentRung.required - currentRung.given}
+          />
+        </div>
+      )}
 
       {pr.order && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
@@ -191,37 +225,79 @@ export default async function RequestDetail({
         </p>
       </div>
 
-      {/* Approvals */}
-      {pr.approvalsRequired > 0 && (
+      {/* Approval ladder */}
+      {ladder.length > 0 && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-2 text-[12px] font-medium text-slate-900">
-            Approvals
+          <div className="mb-3 text-[12px] font-medium text-slate-900">
+            Approval ladder
           </div>
-          {pr.approvals.length === 0 ? (
-            <p className="text-[12px] text-slate-500">
-              Nobody has signed off yet. {pr.approvalsRequired} approval
-              {pr.approvalsRequired === 1 ? "" : "s"} needed before this
-              becomes a purchase order.
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {pr.approvals.map((a) => (
-                <li key={a.id} className="flex gap-2 text-[12px]">
-                  <span className={a.approved ? "text-emerald-600" : "text-red-600"}>
-                    {a.approved ? "✓" : "✕"}
-                  </span>
-                  <span className="text-slate-600">
-                    <span className="font-medium text-slate-900">
-                      {a.approver.name ?? a.approver.email}
-                    </span>{" "}
-                    {a.approved ? "approved" : "rejected"}{" "}
-                    {a.createdAt.toLocaleString("en-GB")}
-                    {a.comment && ` — ${a.comment}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
+          <ol className="space-y-2">
+            {ladder.map((rung) => (
+              <li
+                key={rung.level.position}
+                className={`rounded-md border px-3 py-2 ${
+                  rung.satisfied
+                    ? "border-emerald-200 bg-emerald-50/50"
+                    : rung.isCurrent
+                      ? "border-indigo-200 bg-indigo-50/50"
+                      : "border-slate-200"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                        rung.satisfied
+                          ? "bg-emerald-100 text-emerald-700"
+                          : rung.isCurrent
+                            ? "bg-indigo-100 text-indigo-700"
+                            : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {rung.satisfied ? "✓" : rung.level.position}
+                    </span>
+                    <span className="text-[13px] font-medium text-slate-900">
+                      {rung.level.name ?? `Level ${rung.level.position}`}
+                    </span>
+                    <span className="tabular text-[12px] text-slate-500">
+                      {rung.given} of {rung.required}
+                    </span>
+                    {rung.isCurrent && !rung.satisfied && (
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                        waiting
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {rung.level.approverNames.join(", ") || "no approvers"}
+                  </div>
+                </div>
+                {rung.signedBy.length > 0 && (
+                  <div className="mt-1 text-[11px] text-emerald-700">
+                    signed by {rung.signedBy.join(", ")}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+
+          {pr.approvals.some((a) => !a.approved) && (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-900">
+              {pr.approvals
+                .filter((a) => !a.approved)
+                .map(
+                  (a) =>
+                    `${a.approver.name ?? a.approver.email} rejected this${a.comment ? ` — ${a.comment}` : ""}`,
+                )
+                .join(" ")}
+            </div>
           )}
+        </div>
+      )}
+
+      {ladder.length === 0 && pr.approvalsRequired === 0 && (
+        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          No approval was required — this was approved on submit.
         </div>
       )}
     </div>

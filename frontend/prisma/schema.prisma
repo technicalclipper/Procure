@@ -490,6 +490,11 @@ model Approval {
   approved Boolean
   comment  String?
 
+  /// Which level of the flow this signature was given at. Stored rather
+  /// than derived, because the ladder a request is on was frozen at
+  /// submit and may no longer match the org's current configuration.
+  level Int @default(1)
+
   /// Signature from the approver's own Privy wallet
   signature String?
 
