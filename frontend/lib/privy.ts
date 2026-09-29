@@ -127,6 +127,46 @@ export function createPolicy(input: {
  * Note: `chain_id` goes INSIDE the transaction — a top-level `caip2` key
  * is rejected by this method.
  */
+/**
+ * Sign EIP-712 typed data with a server wallet.
+ *
+ * Verified 2026-09-11 end to end: the returned signature recovers to the
+ * wallet address under viem's `verifyTypedData`, and `recoverAddress` on
+ * the EIP-712 digest returns the same address — which is precisely what
+ * Solidity's ECDSA.recover will do on-chain. That round trip is what
+ * makes contract-verified approvals possible.
+ *
+ * The quirk: Privy's REST schema is snake_case where EIP-712 is camel.
+ * It wants `primary_type`, and rejects `primaryType` outright with
+ * "Unrecognized key(s) in object". `domain`, `types` and `message` are
+ * passed through unchanged, so a viem typed-data object works as-is
+ * apart from that one key.
+ *
+ * Approvers sign client-side with their own embedded wallet instead
+ * (`signTypedData` in @privy-io/react-auth) — an approval has to be
+ * signed by the approver's key, not by a wallet we control. This exists
+ * for wallets the org itself owns.
+ */
+export async function signTypedData(
+  walletId: string,
+  typedData: {
+    domain: Record<string, unknown>;
+    types: Record<string, { name: string; type: string }[]>;
+    primaryType: string;
+    message: Record<string, unknown>;
+  },
+): Promise<`0x${string}`> {
+  const { primaryType, ...rest } = typedData;
+  const out = await privy<{
+    method: string;
+    data: { signature: string; encoding: string };
+  }>("POST", `/v1/wallets/${walletId}/rpc`, {
+    method: "eth_signTypedData_v4",
+    params: { typed_data: { ...rest, primary_type: primaryType } },
+  });
+  return out.data.signature as `0x${string}`;
+}
+
 export async function signTransaction(
   walletId: string,
   transaction: {
