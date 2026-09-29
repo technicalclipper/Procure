@@ -8,6 +8,7 @@ import { nextPoNumber, withNumberRetry } from "@/lib/procurement/numbering";
 import { budgetPosition } from "@/lib/procurement/precheck";
 import { formatUsd } from "@/lib/units";
 import { renderPurchaseOrderEmail } from "@/lib/mail/po-templates";
+import { renderOrderMessageEmail } from "@/lib/mail/vendor-response-templates";
 import { sendEmail } from "@/lib/mail/send";
 
 export type OrderActionState = {
@@ -154,6 +155,57 @@ export async function issueOrderAction(
       poNumber: order.poNumber,
       message: `${order.poNumber} issued — ${formatUsd(pr.amountMinor)} committed against ${pr.department.name}.`,
     };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Reply to the vendor on an order.
+ *
+ * The thread is the same one the vendor sees in their portal — a
+ * question about a line that gets answered by email lands nowhere the
+ * three-way match can ever see it.
+ */
+export async function addOrgCommentAction(
+  slug: string,
+  orderId: string,
+  body: string,
+): Promise<OrderActionState> {
+  try {
+    const ctx = await requireOrgAccess(slug);
+
+    const order = await db.purchaseOrder.findUnique({
+      where: { id: orderId },
+      include: { vendor: { select: { email: true, name: true } } },
+    });
+    if (!order || order.orgId !== ctx.org.id) {
+      return { ok: false, error: "Unknown order." };
+    }
+    if (body.trim().length === 0) {
+      return { ok: false, error: "Write something first." };
+    }
+
+    const comment = await db.poComment.create({
+      data: { orderId, body: body.trim(), author: "ORG" },
+    });
+
+    await sendEmail({
+      event: `PO_MESSAGE:${comment.id}`,
+      recipient: order.vendor.email,
+      template: "po-message",
+      email: renderOrderMessageEmail({
+        poNumber: order.poNumber,
+        fromName: ctx.org.name,
+        recipientEmail: order.vendor.email,
+        body: comment.body,
+        orderUrl: `${appUrl()}/vendor/orders/${order.id}`,
+      }),
+    });
+
+    revalidatePath(`/o/${slug}/orders/${orderId}`);
+    revalidatePath(`/vendor/orders/${orderId}`);
+    return { ok: true, message: "Sent to the vendor." };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

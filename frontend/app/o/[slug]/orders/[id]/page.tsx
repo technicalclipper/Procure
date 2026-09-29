@@ -4,7 +4,7 @@ import { POStatus, Role, VendorPortalStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
-import { CancelOrder } from "../order-controls";
+import { CancelOrder, OrgCommentBox } from "../order-controls";
 import { PO_STATUS } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -204,12 +204,17 @@ export default async function OrderDetail({
         </div>
       )}
 
-      {order.comments.length > 0 && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-2 text-[12px] font-medium text-slate-900">
-            Comments
-          </div>
-          <ul className="space-y-2">
+      <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="mb-2 text-[12px] font-medium text-slate-900">
+          Messages
+        </div>
+        {order.comments.length === 0 ? (
+          <p className="mb-3 text-[12px] text-slate-500">
+            Nothing yet. Anything posted here appears in{" "}
+            {order.vendor.name}&apos;s portal against this order.
+          </p>
+        ) : (
+          <ul className="mb-3 space-y-2">
             {order.comments.map((c) => (
               <li key={c.id} className="text-[12px]">
                 <span
@@ -228,8 +233,13 @@ export default async function OrderDetail({
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+        <OrgCommentBox
+          slug={slug}
+          orderId={order.id}
+          vendorName={order.vendor.name}
+        />
+      </div>
 
       {canEdit && open && !order.bill && (
         <div className="mt-4">

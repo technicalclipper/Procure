@@ -3,10 +3,56 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
+  addOrgCommentAction,
   cancelOrderAction,
   issueOrderAction,
   type OrderActionState,
 } from "./actions";
+
+export function OrgCommentBox({
+  slug,
+  orderId,
+  vendorName,
+}: {
+  slug: string;
+  orderId: string;
+  vendorName: string;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={2}
+        placeholder={`Message ${vendorName} — they see this in their portal`}
+        className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-[12px] outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+      />
+      <button
+        type="button"
+        disabled={pending || body.trim().length === 0}
+        onClick={() =>
+          start(async () => {
+            const r = await addOrgCommentAction(slug, orderId, body);
+            if (r.ok) {
+              setBody("");
+              setError(null);
+              router.refresh();
+            } else setError(r.error ?? "Failed");
+          })
+        }
+        className="mt-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+      >
+        {pending ? "Sending…" : "Send to vendor"}
+      </button>
+      {error && <div className="mt-1 text-[11px] text-red-700">{error}</div>}
+    </div>
+  );
+}
 
 export function IssueOrderButton({
   slug,
