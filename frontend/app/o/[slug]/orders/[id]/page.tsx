@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
 import { CancelOrder, OrgCommentBox } from "../order-controls";
+import { ConfirmReceipt } from "../receipt-controls";
 import { PO_STATUS } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export default async function OrderDetail({
   const { slug, id } = await params;
   const { org, user, canManage } = await requireOrgAccess(slug);
 
-  const [order, purchaser] = await Promise.all([
+  const [order, roles] = await Promise.all([
     db.purchaseOrder.findUnique({
       where: { id },
       include: {
@@ -30,19 +31,32 @@ export default async function OrderDetail({
         comments: { orderBy: { createdAt: "asc" } },
       },
     }),
-    db.membership.findFirst({
-      where: {
-        userId: user.id,
-        role: Role.PURCHASER,
-        department: { orgId: org.id },
-      },
-      select: { id: true },
+    db.membership.findMany({
+      where: { userId: user.id, department: { orgId: org.id } },
+      select: { role: true, departmentId: true },
     }),
   ]);
 
   if (!order || order.orgId !== org.id) notFound();
 
-  const canEdit = canManage || !!purchaser;
+  const canEdit =
+    canManage || roles.some((r) => r.role === Role.PURCHASER);
+
+  // Receipt sits with the requesting side. A purchaser who could raise
+  // the order, book it in and release the payment makes the three-way
+  // match a formality — see receipt-actions.ts.
+  const canReceive =
+    canManage ||
+    roles.some(
+      (r) =>
+        r.role === Role.REQUESTER && r.departmentId === order.departmentId,
+    );
+
+  const awaitingReceipt =
+    !order.receipt &&
+    order.status !== POStatus.ISSUED &&
+    order.status !== POStatus.VENDOR_REJECTED &&
+    order.status !== POStatus.CANCELLED;
   const st = PO_STATUS[order.status];
   const open =
     order.status !== POStatus.CANCELLED &&
@@ -88,6 +102,24 @@ export default async function OrderDetail({
           </div>
         </div>
       </header>
+
+      {awaitingReceipt && canReceive && (
+        <div className="mb-4">
+          <ConfirmReceipt
+            slug={slug}
+            orderId={order.id}
+            vendorName={order.vendor.name}
+          />
+        </div>
+      )}
+
+      {awaitingReceipt && !canReceive && (
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+          Waiting on a requester in {order.department.name} to confirm
+          delivery. Receipt sits with the requesting side, not with whoever
+          pays.
+        </div>
+      )}
 
       {/* Where it is in the cycle */}
       <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
