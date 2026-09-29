@@ -5,6 +5,7 @@ import { requireVendorPortal, getVendorOrder } from "@/lib/vendor-portal";
 import { explorerAddress, explorerTx, shortAddress } from "@/lib/chain";
 import { formatUsd } from "@/lib/units";
 import { OrderResponse, VendorCommentBox } from "../../order-response";
+import { InvoiceForm } from "../../invoice-form";
 import { VendorShell } from "../../shell";
 
 export const dynamic = "force-dynamic";
@@ -55,10 +56,50 @@ export default async function VendorOrderDetail({
         </div>
       )}
 
-      {order.status === POStatus.VENDOR_ACCEPTED && !order.invoice && (
-        <div className="mb-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-[12px] text-teal-900">
-          You&apos;ve accepted this order. Once {order.org.name} confirms
-          delivery, submit your invoice against it here.
+      {order.status === POStatus.VENDOR_ACCEPTED && !order.receipt && (
+        <div className="mb-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-[12px] leading-relaxed text-teal-900">
+          You&apos;ve accepted this order. {order.org.name} confirms delivery
+          next — you&apos;ll be emailed the moment they do, and you can invoice
+          from here. An invoice raised before then has nothing to match
+          against.
+        </div>
+      )}
+
+      {order.receipt && !order.invoice && (
+        <div className="mb-4">
+          <InvoiceForm
+            orderId={order.id}
+            poNumber={order.poNumber}
+            orderedMinor={order.amountMinor.toString()}
+            toleranceBps={order.toleranceBps}
+            orgName={order.org.name}
+          />
+        </div>
+      )}
+
+      {order.invoice && (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-[12px] font-medium text-slate-900">
+            Your invoice
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-3 text-[13px]">
+            <span className="mono text-slate-900">
+              {order.invoice.vendorInvoiceNumber}
+            </span>
+            <span className="tabular font-semibold text-slate-900">
+              {formatUsd(order.invoice.invoicedAmountMinor)}
+            </span>
+          </div>
+          {order.invoice.note && (
+            <p className="mt-1 text-[12px] text-slate-600">
+              {order.invoice.note}
+            </p>
+          )}
+          <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-500">
+            {order.invoice.invoicedAmountMinor === order.amountMinor
+              ? `Agrees exactly with ${order.poNumber}.`
+              : `Ordered ${formatUsd(order.amountMinor)} · invoiced ${formatUsd(order.invoice.invoicedAmountMinor)}. ${order.org.name} resolves any difference before payment.`}
+          </p>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { POStatus, Role, VendorPortalStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
+import { computeVariance } from "@/lib/procurement/match";
 import { CancelOrder, OrgCommentBox } from "../order-controls";
 import { ConfirmReceipt } from "../receipt-controls";
 import { PO_STATUS } from "../page";
@@ -51,6 +52,14 @@ export default async function OrderDetail({
       (r) =>
         r.role === Role.REQUESTER && r.departmentId === order.departmentId,
     );
+
+  const variance = order.invoice
+    ? computeVariance(
+        order.amountMinor,
+        order.invoice.invoicedAmountMinor,
+        order.toleranceBps,
+      )
+    : null;
 
   const awaitingReceipt =
     !order.receipt &&
@@ -230,6 +239,75 @@ export default async function OrderDetail({
         </table>
       </div>
 
+      {order.invoice && (
+        <div
+          className={`mt-4 rounded-lg border p-4 ${
+            variance?.withinTolerance
+              ? "border-emerald-200 bg-emerald-50/60"
+              : "border-amber-300 bg-amber-50/60"
+          }`}
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-[13px] font-medium text-slate-900">
+              Vendor invoice{" "}
+              <span className="mono">
+                {order.invoice.vendorInvoiceNumber}
+              </span>
+            </div>
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                variance?.withinTolerance
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+                  : "bg-amber-50 text-amber-800 ring-amber-600/20"
+              }`}
+            >
+              {variance?.withinTolerance
+                ? "Matches"
+                : `Off by ${variance?.formatted}`}
+            </span>
+          </div>
+
+          <dl className="mt-2 space-y-1 text-[12px]">
+            <Row label="Ordered" value={formatUsd(order.amountMinor)} />
+            <Row
+              label="Invoiced"
+              value={formatUsd(order.invoice.invoicedAmountMinor)}
+            />
+            <Row
+              label={`Tolerance (${variance?.tolerancePercent})`}
+              value={formatUsd(variance?.toleranceMinor ?? 0n)}
+            />
+            <div className="flex items-baseline justify-between border-t border-slate-900/10 pt-1 font-medium">
+              <dt className="text-slate-700">Variance</dt>
+              <dd
+                className={`tabular ${
+                  variance?.withinTolerance
+                    ? "text-emerald-700"
+                    : "text-amber-800"
+                }`}
+              >
+                {variance?.formatted}
+              </dd>
+            </div>
+          </dl>
+
+          {order.invoice.note && (
+            <p className="mt-2 border-t border-slate-900/10 pt-2 text-[12px] text-slate-700">
+              <span className="text-slate-500">
+                From {order.vendor.name}:
+              </span>{" "}
+              {order.invoice.note}
+            </p>
+          )}
+
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+            {variance?.withinTolerance
+              ? "The order, the receipt and this invoice agree. Raising the bill will match and release payment — there is no decision to make."
+              : `This is outside the tolerance the order was issued under, so the match will fail. Resolve it with ${order.vendor.name} — nothing can be paid until it agrees.`}
+          </p>
+        </div>
+      )}
+
       {order.vendorResponseReason && (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
           Vendor response: {order.vendorResponseReason}
@@ -278,6 +356,15 @@ export default async function OrderDetail({
           <CancelOrder slug={slug} orderId={order.id} />
         </div>
       )}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="tabular text-slate-900">{value}</dd>
     </div>
   );
 }
