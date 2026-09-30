@@ -196,6 +196,24 @@ contract ProcureRegistryTest is Test {
         reg.executePayment(ORG, PO, 1, 1, _s);
     }
 
+    /// An org that never configured approvers must not be payable by
+    /// anyone. threshold 0 satisfying `valid >= need` with an empty
+    /// signature array is the difference between a control and a hole.
+    function test_unconfiguredLevelPaysNobody() public {
+        bytes32 org2 = keccak256("unconfigured");
+        vm.startPrank(treasury);
+        reg.registerOrg(org2);
+        reg.setVendorAllowed(org2, vendor, true);
+        reg.setBudget(org2, 10_000e6);
+        reg.commitOrder(org2, keccak256("PO-X"), vendor, 1_000e6, MATCH);
+        vm.stopPrank();
+
+        bytes[] memory none = new bytes[](0);
+        vm.expectRevert(ProcureRegistry.NoApproverSet.selector);
+        reg.executePayment(org2, keccak256("PO-X"), 1, 1, none);
+        assertEq(usdc.balanceOf(vendor), 0, "nothing moved");
+    }
+
     /// Malleability: every signature has a twin with s flipped. Accepting
     /// both would let one approval look like two.
     function test_rejectsMalleableSignature() public {

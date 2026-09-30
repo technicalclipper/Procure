@@ -5,8 +5,10 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
 import { runThreeWayMatch } from "@/lib/procurement/three-way";
-import { explorerAddress, shortAddress } from "@/lib/chain";
+import { explorerAddress, explorerTx, shortAddress, arcTestnet } from "@/lib/chain";
 import { RematchBill } from "../bill-controls";
+import { PayBill } from "../pay-controls";
+import { payabilityReport } from "@/lib/procurement/payment";
 import { BILL_STATUS } from "../page";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +54,11 @@ export default async function BillDetail({
   // was when the bill was raised. The persisted MatchResult remains the
   // record of the decision; this is the current reading beside it.
   const current = runThreeWayMatch(bill.order);
+
+  // What Arc currently believes — signatures it would accept, the
+  // threshold it holds. Read here so the button can state the position
+  // rather than discovering it in a revert.
+  const report = await payabilityReport(bill.id);
   const drifted = latest && current.passed !== (latest.outcome === MatchOutcome.PASS);
 
   return (
@@ -227,30 +234,55 @@ export default async function BillDetail({
         <div className="mb-2 text-[12px] font-medium text-slate-900">
           Payment
         </div>
-        {bill.payment ? (
+        {bill.payment?.txHash ? (
           <div className="text-[12px] text-slate-700">
-            {bill.payment.status.toLowerCase()} ·{" "}
-            {formatUsd(bill.payment.amountMinor)}
+            <span className="font-medium text-emerald-700">
+              {bill.payment.status.toLowerCase()}
+            </span>{" "}
+            · {formatUsd(bill.payment.amountMinor)} to{" "}
+            <a
+              href={explorerAddress(bill.payment.toAddress)}
+              target="_blank"
+              rel="noreferrer"
+              className="mono text-indigo-700 hover:underline"
+            >
+              {shortAddress(bill.payment.toAddress)} ↗
+            </a>
+            <div className="mt-1">
+              <a
+                href={explorerTx(bill.payment.txHash)}
+                target="_blank"
+                rel="noreferrer"
+                className="mono text-[11px] text-indigo-700 underline underline-offset-2"
+              >
+                {bill.payment.txHash.slice(0, 22)}… ↗
+              </a>
+              {bill.payment.blockNumber != null && (
+                <span className="ml-2 text-[11px] text-slate-400">
+                  block {bill.payment.blockNumber.toString()}
+                </span>
+              )}
+            </div>
           </div>
+        ) : bill.status === BillStatus.MATCHED && canAct ? (
+          <PayBill
+            slug={slug}
+            billId={bill.id}
+            amount={formatUsd(bill.invoicedAmountMinor)}
+            vendorName={bill.order.vendor.name}
+            signaturesOnFile={report?.signatures.length ?? 0}
+            signaturesRequired={report?.onchain?.threshold ?? 0}
+            explorerBase={arcTestnet.blockExplorers?.default.url ?? ""}
+          />
         ) : (
           <p className="text-[12px] leading-relaxed text-slate-600">
-            {bill.status === BillStatus.MATCHED ? (
-              <>
-                Payable to{" "}
-                <a
-                  href={explorerAddress(bill.order.vendor.payoutAddress)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mono text-indigo-700 hover:underline"
-                >
-                  {shortAddress(bill.order.vendor.payoutAddress)} ↗
-                </a>{" "}
-                from {bill.order.department.name}. Execution is not wired up
-                yet — it settles on Arc in USDC, signed by the department
-                wallet and bounded by its budget.
-              </>
-            ) : (
-              "Unreachable while the match is failing."
+            {bill.status === BillStatus.MATCHED
+              ? `Payable to ${shortAddress(bill.order.vendor.payoutAddress)} — a purchaser or controller releases it.`
+              : "Unreachable while the match is failing. This isn't a disabled button; the contract has nothing to pay against."}
+            {bill.payment?.failReason && (
+              <span className="mt-1 block text-red-700">
+                Last attempt failed: {bill.payment.failReason}
+              </span>
             )}
           </p>
         )}
