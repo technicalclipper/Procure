@@ -2,33 +2,82 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useSignTypedData } from "@privy-io/react-auth";
 import { decideAction, type DecisionState } from "./approve-actions";
 
+/**
+ * Approving is signing.
+ *
+ * The approver's own Privy wallet signs an EIP-712 struct naming the
+ * order, the amount and the level. That signature is what the contract
+ * recovers at payment — so an approval is a thing only the approver's
+ * key could have produced, not a row our server could have written.
+ *
+ * Rejection isn't signed. There is nothing to authorise, and demanding
+ * a signature to say no would be friction in the direction we least
+ * want it.
+ */
 export function DecisionPanel({
   slug,
   requestId,
   levelLabel,
   remaining,
+  typedData,
 }: {
   slug: string;
   requestId: string;
   levelLabel: string;
   remaining: number;
+  /// Serialised on the server — BigInt can't cross the boundary, and the
+  /// digest must be built from the contract's own domain.
+  typedData: {
+    domain: Record<string, unknown>;
+    types: Record<string, { name: string; type: string }[]>;
+    primaryType: string;
+    message: Record<string, string | number>;
+  } | null;
 }) {
   const router = useRouter();
+  const { signTypedData } = useSignTypedData();
   const [pending, start] = useTransition();
+  const [signing, setSigning] = useState(false);
   const [comment, setComment] = useState("");
   const [result, setResult] = useState<DecisionState | null>(null);
 
-  const decide = (approved: boolean) =>
+  const decide = (approved: boolean) => {
+    setResult(null);
     start(async () => {
-      const r = await decideAction(slug, requestId, approved, comment);
+      let signature: string | null = null;
+
+      if (approved && typedData) {
+        setSigning(true);
+        try {
+          const out = await signTypedData(typedData as never);
+          signature = typeof out === "string" ? out : (out as { signature: string }).signature;
+        } catch (e) {
+          setSigning(false);
+          setResult({
+            ok: false,
+            error:
+              e instanceof Error && /reject|denied|cancel/i.test(e.message)
+                ? "You cancelled the signature — nothing was recorded."
+                : `Couldn't sign: ${e instanceof Error ? e.message : String(e)}`,
+          });
+          return;
+        }
+        setSigning(false);
+      }
+
+      const r = await decideAction(slug, requestId, approved, comment, signature);
       setResult(r);
       if (r.ok) {
         setComment("");
         router.refresh();
       }
     });
+  };
+
+  const busy = pending || signing;
 
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-4">
@@ -41,6 +90,14 @@ export function DecisionPanel({
           ` · ${remaining} more signature${remaining === 2 ? "" : "s"} needed after yours`}
       </p>
 
+      {typedData && (
+        <p className="mt-2 rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-600">
+          Approving asks your wallet to sign. It costs nothing and sends no
+          transaction — the signature is what Arc checks before the money
+          moves, so a payment nobody signed for cannot happen.
+        </p>
+      )}
+
       <textarea
         value={comment}
         onChange={(e) => setComment(e.target.value)}
@@ -52,15 +109,21 @@ export function DecisionPanel({
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={pending}
+          disabled={busy}
           onClick={() => decide(true)}
           className="rounded-md bg-indigo-600 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >
-          {pending ? "Recording…" : "Approve"}
+          {signing
+            ? "Waiting for your signature…"
+            : pending
+              ? "Recording…"
+              : typedData
+                ? "Sign and approve"
+                : "Approve"}
         </button>
         <button
           type="button"
-          disabled={pending || comment.trim().length === 0}
+          disabled={busy || comment.trim().length === 0}
           title={
             comment.trim().length === 0
               ? "Give a reason before rejecting"

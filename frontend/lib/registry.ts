@@ -62,10 +62,10 @@ export async function sendFromTreasury(
   if (!to) throw new Error("NEXT_PUBLIC_REGISTRY_ADDRESS is not set");
 
   const data = encodeFunctionData({
-    abi: REGISTRY_ABI as never,
+    abi: REGISTRY_ABI,
     functionName,
-    args: args as never,
-  });
+    args,
+  } as Parameters<typeof encodeFunctionData>[0]);
 
   const [nonce, gasPrice] = await Promise.all([
     publicClient.getTransactionCount({ address: from as `0x${string}` }),

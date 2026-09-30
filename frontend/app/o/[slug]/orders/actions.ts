@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { nextPoNumber, withNumberRetry } from "@/lib/procurement/numbering";
 import { budgetPosition } from "@/lib/procurement/precheck";
+import { commitOrderOnchain } from "@/lib/procurement/onchain";
 import { formatUsd } from "@/lib/units";
 import { renderPurchaseOrderEmail } from "@/lib/mail/po-templates";
 import { renderOrderMessageEmail } from "@/lib/mail/vendor-response-templates";
@@ -115,6 +116,11 @@ export async function issueOrderAction(
       });
     });
 
+    // Fix the terms on-chain before anyone signs anything. The amount an
+    // approver signs is read back from here at payment, so approving one
+    // figure and paying another isn't caught afterwards — it can't happen.
+    const committed = await commitOrderOnchain(org.id, order.id);
+
     // Tell the vendor. The PO is a document they act on, not a
     // notification — it carries what was ordered and what it's worth.
     const email = renderPurchaseOrderEmail({
@@ -149,11 +155,17 @@ export async function issueOrderAction(
     revalidatePath(`/o/${slug}/requests`);
     revalidatePath("/vendor");
 
+    const onchain = committed.ok
+      ? committed.skipped
+        ? ` Not committed on Arc — ${committed.reason}.`
+        : ` Committed on Arc in ${committed.tx.hash.slice(0, 10)}…`
+      : ` Not committed on Arc — ${committed.error}. It cannot be paid until it is.`;
+
     return {
       ok: true,
       id: order.id,
       poNumber: order.poNumber,
-      message: `${order.poNumber} issued — ${formatUsd(pr.amountMinor)} committed against ${pr.department.name}.`,
+      message: `${order.poNumber} issued — ${formatUsd(pr.amountMinor)} committed against ${pr.department.name}.${onchain}`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAddress, isAddress } from "viem";
 import { AccountType, Role, VendorStatus } from "@prisma/client";
 import { db } from "@/lib/db";
+import { syncVendor } from "@/lib/procurement/onchain";
 import { requireOrgAccess } from "@/lib/org";
 
 export type ActionState = {
@@ -133,18 +134,31 @@ export async function setVendorStatusAction(
       return { ok: false, error: "Unknown vendor." };
     }
 
-    // Activating is what puts an address on the payment rails, so it
-    // needs the risk screen. That gate arrives with the next feature;
-    // until then activation is explicit and recorded.
     await db.vendor.update({
       where: { id },
       data: { status: status as VendorStatus },
     });
 
+    // Activating is what puts an address on the payment rails, so the
+    // allowlist moves with it. This is where the risk screening stops
+    // being advice: once blocked, the contract refuses to pay this
+    // address no matter what our database later says.
+    const sync = await syncVendor(ctx.org.id, id);
+
     revalidatePath(`/o/${slug}/vendors`);
+    revalidatePath(`/o/${slug}/vendors/${id}`);
+
+    const head = `${vendor.name} is now ${status.toLowerCase()}.`;
+    if (!sync.ok) {
+      return {
+        ok: true,
+        message: `${head} Arc allowlist not updated — ${sync.error}. Set the status again to retry.`,
+      };
+    }
+    if (sync.skipped) return { ok: true, message: head };
     return {
       ok: true,
-      message: `${vendor.name} is now ${status.toLowerCase()}.`,
+      message: `${head} Arc allowlist updated in ${sync.tx.hash.slice(0, 10)}…`,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

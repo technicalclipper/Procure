@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { recordDecision } from "@/lib/procurement/approvals";
+import { verifyApprovalSignature } from "@/lib/procurement/signing";
 
 export type DecisionState = {
   ok: boolean;
@@ -16,6 +17,7 @@ export async function decideAction(
   requestId: string,
   approved: boolean,
   comment: string,
+  signature: string | null = null,
 ): Promise<DecisionState> {
   try {
     const { org, user } = await requireOrgAccess(slug);
@@ -28,16 +30,26 @@ export async function decideAction(
       return { ok: false, error: "Unknown request." };
     }
 
+    // Verify before storing. A signature we never checked is worse than
+    // none — it looks like proof in the audit trail and isn't, and the
+    // contract would reject it at payment when it's far too late to ask
+    // the approver to sign again.
+    if (approved && signature) {
+      const check = await verifyApprovalSignature(
+        requestId,
+        user.walletAddress,
+        signature,
+      );
+      if (!check.ok) return { ok: false, error: check.error };
+    }
+
     const result = await recordDecision({
       requestId,
       userId: user.id,
       userName: user.name ?? user.email,
       approved,
       comment: comment.trim() || null,
-      // Signing with the approver's own Privy wallet lands with the
-      // registry work; the decision is recorded against their identity
-      // either way.
-      signature: null,
+      signature,
     });
 
     if (!result.ok) return { ok: false, error: result.error };

@@ -11,6 +11,7 @@ import {
   readSnapshot,
 } from "@/lib/procurement/approvals";
 import { DecisionPanel } from "./decision";
+import { buildApprovalPayloadForClient } from "@/lib/procurement/signing";
 import { IssueOrderButton } from "../../orders/order-controls";
 
 export const dynamic = "force-dynamic";
@@ -135,6 +136,7 @@ export default async function RequestDetail({
             requestId={pr.id}
             levelLabel={`Level ${currentRung.level.position}${currentRung.level.name ? ` · ${currentRung.level.name}` : ""}`}
             remaining={currentRung.required - currentRung.given}
+            typedData={await buildApprovalPayloadForClient(pr.id)}
           />
         </div>
       )}
