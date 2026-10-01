@@ -185,6 +185,6 @@ After deploying, set `NEXT_PUBLIC_REGISTRY_ADDRESS`, have the treasury call `reg
 
 Built: multi-tenant orgs, invitations, departments and budgets, chart of accounts, vendors with Graph risk screening, items, configurable approval flows, purchase requests, signed approvals, purchase orders, vendor portal, goods receipt, vendor invoicing, three-way match, and USDC settlement on Arc.
 
-Not built: double-entry ledger and trial balance (the chart of accounts and `GR/IR Clearing` account are seeded and waiting), document PDFs.
+Also built: double-entry ledger with GR/IR clearing, trial balance with CSV export, an outbox recording every mail raised, and PDFs for all five documents — request, order, goods receipt, bill (with the match verdict and every check) and remittance advice carrying the Arc transaction hash.
 
 Quantity-level matching is not implemented — the receipt confirms an order wholesale rather than per line, so matching is **value-level**. A per-line quantity match would additionally catch "delivered 8, invoiced 10".

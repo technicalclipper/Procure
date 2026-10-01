@@ -94,6 +94,16 @@ export default async function BillDetail({
           </div>
         </div>
         <div className="text-right">
+          <div className="mb-2 flex justify-end gap-2">
+            <a href={`/o/${slug}/bills/${bill.id}/pdf`} target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+              Bill PDF
+            </a>
+            {bill.payment?.txHash && (
+              <a href={`/o/${slug}/bills/${bill.id}/remittance`} target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+                Remittance
+              </a>
+            )}
+          </div>
           <div className="tabular text-[22px] font-semibold text-slate-900">
             {formatUsd(bill.invoicedAmountMinor)}
           </div>

@@ -99,6 +99,14 @@ export default async function RequestDetail({
       >
         ← Requests
       </Link>
+      <a
+        href={`/o/${slug}/requests/${pr.id}/pdf`}
+        target="_blank"
+        rel="noreferrer"
+        className="ml-3 text-[12px] text-indigo-600 underline-offset-2 hover:underline"
+      >
+        Request PDF
+      </a>
 
       <header className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
