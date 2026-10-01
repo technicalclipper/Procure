@@ -13,6 +13,7 @@ import { runThreeWayMatch } from "@/lib/procurement/three-way";
 import { formatUsd } from "@/lib/units";
 import { renderMatchResultEmail } from "@/lib/mail/bill-templates";
 import { sendEmail } from "@/lib/mail/send";
+import { postBill } from "@/lib/ledger/post";
 
 export type BillActionState = {
   ok: boolean;
@@ -121,6 +122,10 @@ export async function createBillAction(
         },
       });
     });
+
+    // Dr GR/IR, Cr Payables. Any variance between ordered and invoiced
+    // stays in GR/IR, where it can't be dismissed.
+    if (match.passed) await postBill(bill.id);
 
     const billUrl = `${appUrl()}/o/${slug}/bills/${bill.id}`;
     for (const recipient of Array.from(

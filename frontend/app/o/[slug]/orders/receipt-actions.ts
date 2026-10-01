@@ -8,6 +8,7 @@ import { nextGrnNumber, withNumberRetry } from "@/lib/procurement/numbering";
 import { formatUsd } from "@/lib/units";
 import { renderGoodsReceiptEmail } from "@/lib/mail/grn-templates";
 import { sendEmail } from "@/lib/mail/send";
+import { postGoodsReceipt } from "@/lib/ledger/post";
 
 export type ReceiptActionState = {
   ok: boolean;
@@ -118,6 +119,10 @@ export async function recordReceiptAction(
       where: { id: order.id },
       data: { status: POStatus.RECEIVED },
     });
+
+    // The liability exists from the moment goods arrive, not from the
+    // moment somebody invoices for them. Dr Expense, Cr GR/IR.
+    await postGoodsReceipt(receipt.id);
 
     const receivedBy = ctx.user.name ?? ctx.user.email;
     const amount = formatUsd(order.amountMinor);
