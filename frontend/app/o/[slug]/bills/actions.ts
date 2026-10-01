@@ -14,6 +14,7 @@ import { formatUsd } from "@/lib/units";
 import { renderMatchResultEmail } from "@/lib/mail/bill-templates";
 import { sendEmail } from "@/lib/mail/send";
 import { postBill } from "@/lib/ledger/post";
+import { autoSettle } from "@/lib/procurement/automation";
 
 export type BillActionState = {
   ok: boolean;
@@ -151,9 +152,21 @@ export async function createBillAction(
       });
     }
 
+    // If the org has said the match is the authorisation, act like it.
+    // Never allowed to throw — losing the match result because an RPC
+    // call timed out would be the worst possible trade.
+    const settled = match.passed ? await autoSettle(bill.id) : null;
+
     revalidatePath(`/o/${slug}/bills`);
     revalidatePath(`/o/${slug}/orders/${orderId}`);
     revalidatePath(`/o/${slug}/payments`);
+
+    let tail = "";
+    if (settled?.attempted && settled.ok) {
+      tail = ` Settled automatically on Arc — ${settled.txHash.slice(0, 12)}…`;
+    } else if (settled?.attempted && !settled.ok) {
+      tail = ` Auto-settlement did not go through: ${settled.error}`;
+    }
 
     return {
       ok: true,
@@ -161,7 +174,7 @@ export async function createBillAction(
       billNumber: bill.billNumber,
       matched: match.passed,
       message: match.passed
-        ? `${bill.billNumber} matched. Order, receipt and invoice agree — this is payable.`
+        ? `${bill.billNumber} matched. Order, receipt and invoice agree — this is payable.${tail}`
         : `${bill.billNumber} failed the match: ${match.reason}. It cannot be paid until this is resolved.`,
     };
   } catch (e) {

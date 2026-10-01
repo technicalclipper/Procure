@@ -60,6 +60,7 @@ const NAV: {
     links: [
       { path: "settings/people", label: "People & roles", visible: ["admin"] },
       { path: "settings/approvals", label: "Approval flows", visible: ["admin"] },
+      { path: "settings/automation", label: "Automation", visible: ["admin"] },
       {
         path: "settings/departments",
         label: "Departments & budgets",
