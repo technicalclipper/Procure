@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
@@ -59,6 +61,8 @@ export async function decideAction(
     revalidatePath(`/o/${slug}/approvals`);
     return { ok: true, message: result.message };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

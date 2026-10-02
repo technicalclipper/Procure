@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { POStatus, Role, VendorPortalStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -180,6 +182,8 @@ export async function recordReceiptAction(
       message: `${receipt.grnNumber} recorded. ${order.vendor.name} can now invoice against ${order.poNumber}.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

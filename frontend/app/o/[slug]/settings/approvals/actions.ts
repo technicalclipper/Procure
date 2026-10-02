@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { ApprovalMode, ApprovalModule } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -44,6 +46,8 @@ export async function setFlowEnabledAction(
         : "Approval turned off — requests are approved automatically.",
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -98,6 +102,8 @@ export async function addLevelAction(
     revalidatePath(`/o/${slug}/settings/approvals`);
     return { ok: true, message: "Level added — now assign approvers to it." };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -135,6 +141,8 @@ export async function removeLevelAction(
     revalidatePath(`/o/${slug}/settings/approvals`);
     return { ok: true, message: "Level removed." };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -192,6 +200,8 @@ export async function setLevelApproversAction(
       message: `${who} Registered on Arc in ${sync.tx.hash.slice(0, 10)}…`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

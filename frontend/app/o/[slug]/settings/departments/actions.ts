@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { AccountType } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -106,6 +108,8 @@ export async function createDepartmentAction(
       message: `${name} (${code}) created with cash account ${cashCode}.${walletNote}`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -142,6 +146,8 @@ export async function updateBudgetAction(
     revalidatePath(`/o/${slug}`);
     return { ok: true, message: `${dept.name} budget updated.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -174,6 +180,8 @@ export async function provisionDepartmentWalletAction(
     revalidatePath(`/o/${slug}`);
     return { ok: true, message: `Wallet provisioned for ${dept.name}.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -199,6 +207,8 @@ export async function provisionTreasuryAction(
     revalidatePath(`/o/${slug}`);
     return { ok: true, message: "Treasury wallet provisioned." };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { AccountType } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -87,6 +89,8 @@ export async function createItemAction(
         : `${code} ${name} created — no default account, so requests using it need manual GL coding.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -114,6 +118,8 @@ export async function toggleItemAction(
       message: `${item.code} ${item.active ? "deactivated" : "reactivated"}.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { POStatus, PRStatus, Role, VendorPortalStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -168,6 +170,8 @@ export async function issueOrderAction(
       message: `${order.poNumber} issued — ${formatUsd(pr.amountMinor)} committed against ${pr.department.name}.${onchain}`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -219,6 +223,8 @@ export async function addOrgCommentAction(
     revalidatePath(`/vendor/orders/${orderId}`);
     return { ok: true, message: "Sent to the vendor." };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -258,6 +264,8 @@ export async function cancelOrderAction(
     revalidatePath(`/o/${slug}/orders/${orderId}`);
     return { ok: true, message: `${order.poNumber} cancelled — budget released.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

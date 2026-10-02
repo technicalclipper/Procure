@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { POStatus } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -121,6 +123,8 @@ export async function respondToOrderAction(
         : `${order.poNumber} rejected.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -203,6 +207,7 @@ export async function submitInvoiceAction(
         },
       });
     } catch (e) {
+      unstable_rethrow(e);
       // Unique on (vendorId, vendorInvoiceNumber) — the same supplier
       // sending the same number twice is a duplicate-invoice attempt,
       // which is exactly what the index is there to stop.
@@ -256,6 +261,8 @@ export async function submitInvoiceAction(
         : `${number} submitted, but it's ${variance.formatted} against ${order.poNumber}. That's outside the agreed ${variance.tolerancePercent}, so ${order.org.name} has to resolve it before anything can be paid.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -309,6 +316,8 @@ export async function addVendorCommentAction(
     revalidatePath(`/o/${order.org.slug}/orders/${orderId}`);
     return { ok: true, message: "Comment added." };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

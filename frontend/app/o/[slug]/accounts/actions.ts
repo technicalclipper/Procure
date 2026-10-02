@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { AccountType } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -73,6 +75,8 @@ export async function createAccountAction(
         : `${code} ${name} created.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -128,6 +132,8 @@ export async function toggleAccountAction(
     revalidatePath(`/o/${slug}/accounts`);
     return { ok: true, message: `${account.code} reactivated.` };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

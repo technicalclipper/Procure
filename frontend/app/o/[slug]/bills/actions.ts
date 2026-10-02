@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import {
   BillStatus,
@@ -178,6 +180,8 @@ export async function createBillAction(
         : `${bill.billNumber} failed the match: ${match.reason}. It cannot be paid until this is resolved.`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -248,6 +252,8 @@ export async function rematchBillAction(
         : `Still failing: ${match.reason}`,
     };
   } catch (e) {
+    // redirect() and notFound() signal by throwing; let them through.
+    unstable_rethrow(e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
