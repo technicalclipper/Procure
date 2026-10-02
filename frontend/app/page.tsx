@@ -46,11 +46,11 @@ export default async function Landing() {
         {/* ── top bar ─────────────────────────────────────────────── */}
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3.5">
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-[17px] font-semibold tracking-tight text-slate-900">
+            <div className="flex items-baseline gap-3">
+              <span className="text-[26px] font-semibold leading-none tracking-[-0.02em] text-slate-900">
                 Procure
               </span>
-              <span className="hidden text-[12px] text-slate-500 sm:inline">
+              <span className="hidden text-[13px] text-slate-500 sm:inline">
                 The approval is the payment.
               </span>
             </div>
