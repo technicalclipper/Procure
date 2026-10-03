@@ -1,4 +1,4 @@
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 /**
  * Prisma 7 moved connection URLs out of schema.prisma.
@@ -9,11 +9,17 @@ import { defineConfig, env } from "prisma/config";
  *
  * Env comes from .env.local — the db:* scripts wrap these commands in
  * `dotenv -e .env.local` so there's one source of truth for config.
+ *
+ * Read with a fallback rather than prisma's env(), which throws while
+ * merely loading this file. `prisma generate` needs the schema, not a
+ * database, and it runs in CI where DIRECT_URL isn't set — throwing
+ * there fails the build with a connection error for a command that
+ * never connects. Anything that does connect still fails loudly.
  */
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: env("DIRECT_URL"),
+    url: process.env.DIRECT_URL ?? "postgresql://unset:unset@localhost:5432/unset",
   },
   migrations: {
   },
