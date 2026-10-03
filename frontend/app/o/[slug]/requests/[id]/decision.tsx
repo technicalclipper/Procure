@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { useSignTypedData } from "@privy-io/react-auth";
+import { useSignTypedData, useWallets } from "@privy-io/react-auth";
 import { decideAction, type DecisionState } from "./approve-actions";
 
 /**
@@ -44,6 +44,7 @@ export function DecisionPanel({
 }) {
   const router = useRouter();
   const { signTypedData } = useSignTypedData();
+  const { wallets } = useWallets();
   const [pending, start] = useTransition();
   const [signing, setSigning] = useState(false);
   const [comment, setComment] = useState("");
@@ -66,14 +67,38 @@ export function DecisionPanel({
       if (approved && typedData) {
         setSigning(true);
         try {
-          const out = await signTypedData(
-            typedData as never,
-            walletAddress ? { address: walletAddress } : undefined,
+          // Sign through the wallet's own EIP-1193 provider rather than
+          // Privy's modal. The modal has to pick a wallet, and with a
+          // browser extension installed it opens against nothing and
+          // renders an empty overlay. Going straight to the provider
+          // also means no dialog at all — which is what an approval
+          // should feel like, given it costs nothing and sends nothing.
+          const embedded = wallets.find(
+            (w) =>
+              w.walletClientType === "privy" &&
+              (!walletAddress ||
+                w.address.toLowerCase() === walletAddress.toLowerCase()),
           );
-          signature =
-            typeof out === "string"
-              ? out
-              : (out as { signature: string }).signature;
+
+          if (embedded) {
+            const provider = await embedded.getEthereumProvider();
+            signature = (await provider.request({
+              method: "eth_signTypedData_v4",
+              params: [embedded.address, JSON.stringify(typedData)],
+            })) as string;
+          } else {
+            // No embedded wallet in this browser session — fall back to
+            // the modal, which at least explains itself if it can't.
+            const out = await signTypedData(
+              typedData as never,
+              walletAddress ? { address: walletAddress } : undefined,
+            );
+            signature =
+              typeof out === "string"
+                ? out
+                : (out as { signature: string }).signature;
+          }
+
           if (!signature) throw new Error("Wallet returned no signature.");
         } catch (e) {
           setSigning(false);
@@ -81,7 +106,14 @@ export function DecisionPanel({
           // Log the raw error — the wallet's own wording is the only
           // thing that says which part of the payload it disliked, and
           // a tidied-up message would throw that away.
-          console.error("[approve] signTypedData failed", e, typedData);
+          console.error("[approve] signing failed", e, {
+            typedData,
+            walletAddress,
+            wallets: wallets.map((w) => ({
+              address: w.address,
+              type: w.walletClientType,
+            })),
+          });
           setResult({
             ok: false,
             error: /reject|denied|cancel|closed/i.test(message)
