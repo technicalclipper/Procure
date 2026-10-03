@@ -23,11 +23,16 @@ export function DecisionPanel({
   levelLabel,
   remaining,
   typedData,
+  walletAddress,
 }: {
   slug: string;
   requestId: string;
   levelLabel: string;
   remaining: number;
+  /// Which wallet must sign. Passed explicitly because Privy cannot
+  /// resolve one on its own when a browser extension is also present —
+  /// the modal opens against nothing and never renders.
+  walletAddress: string | null;
   /// Serialised on the server — BigInt can't cross the boundary, and the
   /// digest must be built from the contract's own domain.
   typedData: {
@@ -49,10 +54,22 @@ export function DecisionPanel({
     start(async () => {
       let signature: string | null = null;
 
+      if (approved && typedData && !walletAddress) {
+        setResult({
+          ok: false,
+          error:
+            "Your account has no wallet yet, so there is nothing to sign with. Sign out and back in to have one provisioned.",
+        });
+        return;
+      }
+
       if (approved && typedData) {
         setSigning(true);
         try {
-          const out = await signTypedData(typedData as never);
+          const out = await signTypedData(
+            typedData as never,
+            walletAddress ? { address: walletAddress } : undefined,
+          );
           signature =
             typeof out === "string"
               ? out

@@ -145,6 +145,7 @@ export default async function RequestDetail({
             levelLabel={`Level ${currentRung.level.position}${currentRung.level.name ? ` · ${currentRung.level.name}` : ""}`}
             remaining={currentRung.required - currentRung.given}
             typedData={await buildApprovalPayloadForClient(pr.id)}
+            walletAddress={user.walletAddress}
           />
         </div>
       )}
