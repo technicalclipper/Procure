@@ -44,6 +44,15 @@ export const arcChain = defineChain({
   testnet: IS_TESTNET,
 });
 
+/**
+ * How to name the chain in UI copy.
+ *
+ * Derived, never written out. A page that says "testnet" while pointed at
+ * mainnet is worse than one that says nothing: it is the single claim a
+ * reviewer checks first, and it is wrong in the direction that disqualifies.
+ */
+export const ARC_LABEL = arcChain.testnet ? "Arc testnet" : "Arc mainnet";
+
 /** CAIP-2 identifier — what Privy's `eth_sendTransaction` expects. */
 export const ARC_CAIP2 = `eip155:${arcChain.id}` as const;
 

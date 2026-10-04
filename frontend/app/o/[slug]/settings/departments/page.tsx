@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requireOrgManage } from "@/lib/org";
-import { usdcBalances, explorerAddress, shortAddress } from "@/lib/chain";
+import { usdcBalances, explorerAddress, shortAddress, ARC_LABEL } from "@/lib/chain";
 import { formatUsd, formatAmount } from "@/lib/units";
 import {
   AddDepartment,
@@ -243,7 +243,7 @@ export default async function DepartmentsPage({
         {departments.length > 0 && totalOnChain === 0n && (
           <p className="mt-3 text-[12px] text-slate-500">
             Wallets exist but hold no USDC. Fund them from the Circle faucet
-            on Arc testnet — balances read live from{" "}
+            on {ARC_LABEL} — balances read live from{" "}
             <span className="mono">0x3600…0000</span>.
           </p>
         )}

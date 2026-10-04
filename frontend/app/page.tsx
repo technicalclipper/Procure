@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/session";
 import { getUserOrgs } from "@/lib/org";
-import { explorerAddress, shortAddress } from "@/lib/chain";
+import { explorerAddress, shortAddress, ARC_LABEL } from "@/lib/chain";
 import { getPendingInvitations } from "@/lib/invitations";
 import { describeRole, titleCase } from "@/lib/mail/templates";
 import { registryAddress } from "@/lib/registry";
@@ -102,7 +102,7 @@ export default async function Landing() {
           <main>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] text-slate-600">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Live on Arc testnet
+              Live on {ARC_LABEL}
               {registry && (
                 <a
                   href={explorerAddress(registry)}

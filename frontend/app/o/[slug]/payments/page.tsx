@@ -3,7 +3,7 @@ import { PaymentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
-import { explorerAddress, explorerTx, shortAddress } from "@/lib/chain";
+import { explorerAddress, explorerTx, shortAddress, ARC_LABEL } from "@/lib/chain";
 import { registryAddress } from "@/lib/registry";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +74,7 @@ export default async function PaymentsPage({
           >
             {shortAddress(registry)} ↗
           </a>{" "}
-          on Arc testnet — it verifies the approver signatures, the vendor
+          on {ARC_LABEL} — it verifies the approver signatures, the vendor
           allowlist and the budget before releasing anything.
         </div>
       )}

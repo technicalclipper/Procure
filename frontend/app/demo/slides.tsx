@@ -22,10 +22,21 @@ export type Slide = {
 
 const ACCENT = "text-indigo-600";
 
+// Read from env rather than written out: a deck that quotes last
+// deployment's address is a deck that quotes the wrong one.
+const REGISTRY = process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ?? "";
+const REGISTRY_SHORT = REGISTRY
+  ? `${REGISTRY.slice(0, 10)}…${REGISTRY.slice(-6)}`
+  : "not deployed";
+const CHAIN_LABEL =
+  (process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? "5042") === "5042"
+    ? "Arc mainnet"
+    : "Arc testnet";
+
 export const SLIDES: Slide[] = [
   /* 1 ─ title */
   {
-    eyebrow: "ETHGlobal · Procure",
+    eyebrow: "Arc · Procure",
     headline: (
       <>
         The approval <span className={ACCENT}>is</span> the payment.
@@ -92,8 +103,8 @@ export const SLIDES: Slide[] = [
           change a row, change the answer.
         </Pain>
         <Pain>
-          Invoice fraud is a $5B-a-year problem because &ldquo;approved&rdquo;
-          is a database field.
+          Invoice fraud works because &ldquo;approved&rdquo; is a database
+          field, and the payment never re-checks it.
         </Pain>
       </ul>
     ),
@@ -313,7 +324,7 @@ export const SLIDES: Slide[] = [
     headline: "Deployed, tested, and moving real USDC.",
     body: (
       <div className="mt-10 grid gap-3 sm:grid-cols-2">
-        <Proof k="ProcureRegistry" v="0xa033ac54…FE11f0" note="Arc testnet" />
+        <Proof k="ProcureRegistry" v={REGISTRY_SHORT} note={CHAIN_LABEL} />
         <Proof k="Contract tests" v="14 passing" note="mostly revert paths" />
         <Proof k="Gas per cycle" v="< $0.01" note="USDC is the gas token" />
         <Proof k="Approver cost" v="$0.00" note="signing is free" />
