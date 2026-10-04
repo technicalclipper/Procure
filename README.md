@@ -16,8 +16,9 @@ Most spend-management software enforces that rule in application code, which mea
 
 | | |
 |---|---|
-| **`ProcureRegistry`** | [`0xa033ac540710763422618453C80AA026c0FE11f0`](https://testnet.arcscan.app/address/0xa033ac540710763422618453C80AA026c0FE11f0) |
-| Chain | Arc testnet (`5042002`) — USDC is the gas token |
+| **`ProcureRegistry`** | [`0x839234b10e65842017f713a51639720f5007bea2`](https://explorer.arc.io/address/0x839234b10e65842017f713a51639720f5007bea2) |
+| Chain | **Arc mainnet** (`5042`) — USDC is the gas token |
+| Deployed in | [`0xfa9bf706…73917`](https://explorer.arc.io/tx/0xfa9bf70678b6324bb69ce19a6706809a5fa4c0f7612ee9be9235a738dbe73917) · block 24,192,412 |
 | USDC | `0x3600000000000000000000000000000000000000` |
 | Contract tests | 14 passing, mostly revert paths |
 
