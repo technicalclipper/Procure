@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { pdfResponse } from "@/lib/pdf/build";
 import { remittancePdf } from "@/lib/pdf/documents";
-import { arcTestnet } from "@/lib/chain";
+import { arcChain } from "@/lib/chain";
 
 export async function GET(
   _r: Request,
@@ -36,7 +36,7 @@ export async function GET(
     toAddress: bill.payment.toAddress,
     txHash: bill.payment.txHash,
     blockNumber: bill.payment.blockNumber?.toString() ?? null,
-    explorerUrl: arcTestnet.blockExplorers?.default.url ?? "",
+    explorerUrl: arcChain.blockExplorers?.default.url ?? "",
   });
 
   return pdfResponse(doc, `${bill.billNumber}-remittance.pdf`);

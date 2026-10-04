@@ -1,5 +1,5 @@
 import { encodeFunctionData, keccak256, toHex, getAddress } from "viem";
-import { publicClient } from "./chain";
+import { arcChain, publicClient } from "./chain";
 import { signTransaction } from "./privy";
 import abi from "./registry-abi.json";
 
@@ -83,7 +83,7 @@ export async function sendFromTreasury(
   const signed = await signTransaction(walletId, {
     to,
     data,
-    chain_id: 5042002,
+    chain_id: arcChain.id,
     nonce,
     gas_limit: Number((gas * 13n) / 10n),
     max_fee_per_gas: "0x" + (gasPrice * 2n).toString(16),
@@ -130,7 +130,7 @@ export function approvalTypedData(
     domain: {
       name: "Procure",
       version: "1",
-      chainId: 5042002,
+      chainId: arcChain.id,
       verifyingContract,
     },
     types: {

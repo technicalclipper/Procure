@@ -1,11 +1,12 @@
 import { createPublicClient, defineChain, http, erc20Abi } from "viem";
 
 /**
- * Arc testnet — Circle's L1 for stablecoin finance.
+ * Arc — Circle's L1 for stablecoin finance.
  *
- * Verified live 2026-09-06:
- *   eth_chainId  -> 0x4cef52 (5042002)
- *   eth_gasPrice -> 0x4e3b29200 (21e9), i.e. 18-decimal native accounting
+ * One chain object, selected by env, defaulting to mainnet. Verified live:
+ *   mainnet  chainId 0x13b2   (5042)     rpc.mainnet.arc.io
+ *   testnet  chainId 0x4cef52 (5042002)  rpc.testnet.arc.io
+ * Both price gas at 20 gwei and expose USDC at the same predeploy.
  *
  * NOTE on `nativeCurrency.decimals`: Arc denominates fees in USDC, but the
  * native gas accounting is 18 decimals while the USDC ERC-20 interface is 6.
@@ -13,26 +14,38 @@ import { createPublicClient, defineChain, http, erc20Abi } from "viem";
  * all of which speak the 18-decimal representation. So 18 is correct here —
  * it is NOT the decimals used for USDC transfers. See lib/units.ts.
  */
-export const arcTestnet = defineChain({
-  id: Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? 5042002),
-  name: "Arc Testnet",
+export const ARC_MAINNET_ID = 5042;
+
+const CHAIN_ID = Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? ARC_MAINNET_ID);
+const IS_TESTNET = CHAIN_ID !== ARC_MAINNET_ID;
+
+export const arcChain = defineChain({
+  id: CHAIN_ID,
+  name: IS_TESTNET ? "Arc Testnet" : "Arc",
   nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.io"],
+      http: [
+        process.env.NEXT_PUBLIC_ARC_RPC_URL ??
+          (IS_TESTNET
+            ? "https://rpc.testnet.arc.io"
+            : "https://rpc.mainnet.arc.io"),
+      ],
     },
   },
   blockExplorers: {
     default: {
-      name: "Arcscan",
-      url: process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://testnet.arcscan.app",
+      name: IS_TESTNET ? "Arcscan" : "Arc Explorer",
+      url:
+        process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ??
+        (IS_TESTNET ? "https://testnet.arcscan.app" : "https://explorer.arc.io"),
     },
   },
-  testnet: true,
+  testnet: IS_TESTNET,
 });
 
 /** CAIP-2 identifier — what Privy's `eth_sendTransaction` expects. */
-export const ARC_CAIP2 = `eip155:${arcTestnet.id}` as const;
+export const ARC_CAIP2 = `eip155:${arcChain.id}` as const;
 
 /**
  * USDC ERC-20 predeploy. Verified live: decimals()=6, symbol()="USDC",
@@ -45,7 +58,7 @@ export const USDC_ADDRESS = (process.env.NEXT_PUBLIC_USDC_ADDRESS ??
   "0x3600000000000000000000000000000000000000") as `0x${string}`;
 
 export const publicClient = createPublicClient({
-  chain: arcTestnet,
+  chain: arcChain,
   transport: http(),
 });
 
@@ -77,11 +90,11 @@ export async function usdcBalances(
 }
 
 export function explorerTx(hash: string): string {
-  return `${arcTestnet.blockExplorers.default.url}/tx/${hash}`;
+  return `${arcChain.blockExplorers.default.url}/tx/${hash}`;
 }
 
 export function explorerAddress(address: string): string {
-  return `${arcTestnet.blockExplorers.default.url}/address/${address}`;
+  return `${arcChain.blockExplorers.default.url}/address/${address}`;
 }
 
 /** 0x1234…abcd */

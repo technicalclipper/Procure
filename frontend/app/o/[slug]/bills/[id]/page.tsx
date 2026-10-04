@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireOrgAccess } from "@/lib/org";
 import { formatUsd } from "@/lib/units";
 import { runThreeWayMatch } from "@/lib/procurement/three-way";
-import { explorerAddress, explorerTx, shortAddress, arcTestnet } from "@/lib/chain";
+import { explorerAddress, explorerTx, shortAddress, arcChain } from "@/lib/chain";
 import { RematchBill } from "../bill-controls";
 import { PayBill } from "../pay-controls";
 import { payabilityReport } from "@/lib/procurement/payment";
@@ -291,7 +291,7 @@ export default async function BillDetail({
             vendorName={bill.order.vendor.name}
             signaturesOnFile={report?.signatures.length ?? 0}
             signaturesRequired={report?.onchain?.threshold ?? 0}
-            explorerBase={arcTestnet.blockExplorers?.default.url ?? ""}
+            explorerBase={arcChain.blockExplorers?.default.url ?? ""}
           />
         ) : (
           <p className="text-[12px] leading-relaxed text-slate-600">

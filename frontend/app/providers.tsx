@@ -1,7 +1,7 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
-import { arcTestnet } from "@/lib/chain";
+import { arcChain } from "@/lib/chain";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -30,8 +30,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         embeddedWallets: {
           ethereum: { createOnLogin: "users-without-wallets" },
         },
-        defaultChain: arcTestnet,
-        supportedChains: [arcTestnet],
+        defaultChain: arcChain,
+        supportedChains: [arcChain],
         appearance: {
           theme: "light",
           accentColor: "#4f46e5",
